@@ -82,11 +82,17 @@ export function FraunhoferLab({ compact = false }) {
     submitAperture(next, { quality: "live" });
   }, [submitAperture]);
 
-  function announce(message) {
+  const announce = useCallback((message) => {
     setToast(message);
     window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(""), 2200);
-  }
+  }, []);
+
+  const pauseForFunctionEdit = useCallback(() => {
+    if (!autoRun) return;
+    setAutoRun(false);
+    announce("实时渲染已暂停，可安心编辑屏函数");
+  }, [announce, autoRun]);
 
   function savePattern() {
     const canvas = outputCanvasRef.current;
@@ -122,6 +128,8 @@ export function FraunhoferLab({ compact = false }) {
                 onChange={commitAperture}
                 onPreview={submitAperture}
                 onModeChange={setEditorMode}
+                onFunctionEditStart={pauseForFunctionEdit}
+                isRenderingPaused={!autoRun}
               />
 
               <div className="optical-bridge" aria-label={`薄透镜焦距 ${focalLength.toFixed(2)} 米`}>

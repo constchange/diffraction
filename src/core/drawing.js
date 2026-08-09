@@ -56,6 +56,36 @@ export function paintStampInto({ amplitude, phase, size, x: centreX, y: centreY,
   return { amplitude, phase };
 }
 
+export function paintRectangleInto({ amplitude, phase, size, from, to, transmission }) {
+  const left = Math.max(0, Math.min(from.x, to.x));
+  const right = Math.min(size, Math.max(from.x, to.x));
+  const top = Math.max(0, Math.min(from.y, to.y));
+  const bottom = Math.min(size, Math.max(from.y, to.y));
+  if (right <= left || bottom <= top) return { amplitude, phase };
+
+  const minimumX = Math.max(0, Math.floor(left));
+  const maximumX = Math.min(size - 1, Math.ceil(right) - 1);
+  const minimumY = Math.max(0, Math.floor(top));
+  const maximumY = Math.min(size - 1, Math.ceil(bottom) - 1);
+  const value = Math.max(0, Math.min(1, transmission));
+
+  for (let y = minimumY; y <= maximumY; y += 1) {
+    const verticalCoverage = Math.max(0, Math.min(y + 1, bottom) - Math.max(y, top));
+    for (let x = minimumX; x <= maximumX; x += 1) {
+      const horizontalCoverage = Math.max(0, Math.min(x + 1, right) - Math.max(x, left));
+      applyCoverage(
+        amplitude,
+        phase,
+        y * size + x,
+        value,
+        horizontalCoverage * verticalCoverage,
+        false,
+      );
+    }
+  }
+  return { amplitude, phase };
+}
+
 function distanceToSegment(px, py, fromX, fromY, toX, toY) {
   const dx = toX - fromX;
   const dy = toY - fromY;
@@ -91,6 +121,105 @@ export function paintSegmentInto({ amplitude, phase, size, from, to, radius, too
         inside / (samples * samples),
         tool === "eraser",
       );
+    }
+  }
+  return { amplitude, phase };
+}
+
+export function paintDrawingOperationInto({ amplitude, phase, size, operation, offsetX = 0, offsetY = 0 }) {
+  if (operation.kind === "rectangle") {
+    return paintRectangleInto({
+      amplitude,
+      phase,
+      size,
+      from: { x: operation.from.x + offsetX, y: operation.from.y + offsetY },
+      to: { x: operation.to.x + offsetX, y: operation.to.y + offsetY },
+      transmission: operation.transmission,
+    });
+  }
+  if (operation.kind === "segment") {
+    return paintSegmentInto({
+      amplitude,
+      phase,
+      size,
+      from: { x: operation.from.x + offsetX, y: operation.from.y + offsetY },
+      to: { x: operation.to.x + offsetX, y: operation.to.y + offsetY },
+      radius: operation.radius,
+      tool: operation.tool,
+      transmission: operation.transmission,
+    });
+  }
+  return paintStampInto({
+    amplitude,
+    phase,
+    size,
+    x: operation.x + offsetX,
+    y: operation.y + offsetY,
+    radius: operation.radius,
+    tool: operation.tool,
+    transmission: operation.transmission,
+  });
+}
+
+export function drawingUnitBounds(operations) {
+  if (!operations.length) return null;
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const operation of operations) {
+    if (operation.kind === "rectangle") {
+      left = Math.min(left, operation.from.x, operation.to.x);
+      right = Math.max(right, operation.from.x, operation.to.x);
+      top = Math.min(top, operation.from.y, operation.to.y);
+      bottom = Math.max(bottom, operation.from.y, operation.to.y);
+      continue;
+    }
+    const minimumX = operation.kind === "segment"
+      ? Math.min(operation.from.x, operation.to.x) - operation.radius
+      : operation.x - operation.radius;
+    const maximumX = operation.kind === "segment"
+      ? Math.max(operation.from.x, operation.to.x) + operation.radius
+      : operation.x + operation.radius;
+    const minimumY = operation.kind === "segment"
+      ? Math.min(operation.from.y, operation.to.y) - operation.radius
+      : operation.y - operation.radius;
+    const maximumY = operation.kind === "segment"
+      ? Math.max(operation.from.y, operation.to.y) + operation.radius
+      : operation.y + operation.radius;
+    left = Math.min(left, minimumX);
+    right = Math.max(right, maximumX);
+    top = Math.min(top, minimumY);
+    bottom = Math.max(bottom, maximumY);
+  }
+  return { left, right, top, bottom, width: right - left, height: bottom - top };
+}
+
+export function repeatDrawingUnitInto({
+  amplitude,
+  phase,
+  size,
+  operations,
+  count,
+  spacing,
+  direction,
+}) {
+  const bounds = drawingUnitBounds(operations);
+  if (!bounds) return { amplitude, phase };
+  const repeatCount = Math.max(0, Math.floor(count));
+  const gap = Math.max(0, spacing);
+  const stepX = direction === "horizontal" ? bounds.width + gap : 0;
+  const stepY = direction === "vertical" ? bounds.height + gap : 0;
+  for (let copy = 1; copy <= repeatCount; copy += 1) {
+    for (const operation of operations) {
+      paintDrawingOperationInto({
+        amplitude,
+        phase,
+        size,
+        operation,
+        offsetX: stepX * copy,
+        offsetY: stepY * copy,
+      });
     }
   }
   return { amplitude, phase };
