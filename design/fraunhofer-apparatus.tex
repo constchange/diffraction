@@ -1,0 +1,68 @@
+\documentclass[tikz,border=8pt]{standalone}
+\usepackage{ctex}
+\usetikzlibrary{arrows.meta,calc}
+
+\definecolor{labblue}{HTML}{5B9BFF}
+\definecolor{labcyan}{HTML}{5CE8FF}
+\definecolor{labgold}{HTML}{FFD66B}
+\definecolor{labink}{HTML}{19345F}
+\definecolor{labmuted}{HTML}{86A0C8}
+
+\begin{document}
+\begin{tikzpicture}[
+  x=0.82cm,
+  y=0.82cm,
+  >={Latex[length=2.2mm,width=1.4mm]},
+  ray/.style={draw=labcyan,line width=0.75pt,-{Latex[length=1.7mm,width=1.1mm]}},
+  label/.style={font=\sffamily\footnotesize,text=labmuted,align=center}
+]
+  % Optical axis
+  \draw[labink,densely dashed,line width=0.55pt] (0.25,0)--(15.15,0);
+
+  % Source at the front focal plane of L1
+  \fill[labgold] (0.85,0) circle (2.1pt);
+  \draw[labgold,line width=0.7pt] (0.85,-0.32)--(0.85,-0.15)
+    (0.85,0.15)--(0.85,0.32) (0.53,0)--(0.70,0) (1.00,0)--(1.17,0);
+
+  % L1: collimating convex lens
+  \path[draw=labblue,fill=labblue!18,line width=0.9pt]
+    (3.25,-1.35) .. controls (3.78,-0.68) and (3.78,0.68) .. (3.25,1.35)
+    .. controls (2.72,0.68) and (2.72,-0.68) .. cycle;
+
+  % Diverging source rays before L1 and collimated rays after L1
+  \draw[ray,draw=labgold] (1.05,0)--(3.25,0.78);
+  \draw[ray,draw=labgold] (1.05,0)--(3.25,0);
+  \draw[ray,draw=labgold] (1.05,0)--(3.25,-0.78);
+  \draw[ray] (3.25,0.78)--(6.35,0.78);
+  \draw[ray] (3.25,0)--(6.35,0);
+  \draw[ray] (3.25,-0.78)--(6.35,-0.78);
+
+  % Aperture screen with a central opening
+  \fill[labink] (6.35,0.28) rectangle (6.56,1.48);
+  \fill[labink] (6.35,-1.48) rectangle (6.56,-0.28);
+  \draw[labblue,line width=0.65pt] (6.35,-1.48) rectangle (6.56,1.48);
+
+  % L2: Fourier lens
+  \path[draw=labblue,fill=labblue!18,line width=0.9pt]
+    (10.05,-1.35) .. controls (10.58,-0.68) and (10.58,0.68) .. (10.05,1.35)
+    .. controls (9.52,0.68) and (9.52,-0.68) .. cycle;
+
+  % Representative diffracted orders and their focal-plane positions
+  \draw[ray] (6.56,0)--(10.05,0.95)--(13.55,0.45);
+  \draw[ray] (6.56,0)--(10.05,0)--(13.55,0);
+  \draw[ray] (6.56,0)--(10.05,-0.95)--(13.55,-0.45);
+
+  % Observation screen and diffraction marks
+  \path[draw=labblue,fill=labblue!9,line width=0.9pt]
+    (13.55,-1.48) -- (13.87,-1.27) -- (13.87,1.27) -- (13.55,1.48) -- cycle;
+  \fill[labcyan] (13.63,0) ellipse (1.4pt and 3.6pt);
+  \fill[labcyan!82] (13.63,0.45) ellipse (1.0pt and 2.4pt);
+  \fill[labcyan!82] (13.63,-0.45) ellipse (1.0pt and 2.4pt);
+
+  \node[label] at (0.85,-2.02) {光源};
+  \node[label] at (3.25,-2.02) {凸透镜 $L_1$};
+  \node[label] at (6.45,-2.02) {衍射屏};
+  \node[label] at (10.05,-2.02) {凸透镜 $L_2$};
+  \node[label] at (13.7,-2.02) {光屏};
+\end{tikzpicture}
+\end{document}

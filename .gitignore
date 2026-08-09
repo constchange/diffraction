@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.DS_Store
+.partial-deps-backup-*/
+design/implementation-initial.png
+design/implementation-qa*.png
+design/implementation-responsive-768.png
+design/browser-interaction-qa*.png
+design/comparison-qa*.png
+design/*.png
+design/*.html
+design-qa.md
+src/assets/singularity-mark.png
+src/assets/student-avatar.webp
