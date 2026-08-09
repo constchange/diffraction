@@ -37,7 +37,14 @@ npm run test:sites
 
 ## 腾讯 EdgeOne Pages 准备
 
-项目是无后端的 Vite 静态应用，构建命令为 `npm run build`，静态发布目录为 `dist/client`。`base` 使用相对路径，便于从 GitHub 连接腾讯 EdgeOne Pages，并部署在独立域名或子路径。
+项目是无后端的 Vite 静态应用。腾讯 EdgeOne Pages 使用以下构建设置：
+
+```text
+构建命令：npm run build
+输出目录：dist/client
+```
+
+默认资源基路径为 `/`，适合绑定在独立域名根路径，避免静态资源被错误解析成 `/assets/assets/...`。如果需要部署到子路径，可在构建环境中设置 `VITE_BASE_PATH=/子路径/`。
 
 ## 嵌入其他网页
 

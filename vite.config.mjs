@@ -3,7 +3,10 @@ import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
 export default defineConfig({
-  base: "./",
+  // EdgeOne Pages serves this app from the root of the connected domain.
+  // Keep the default absolute so an HTML fallback at a nested URL cannot turn
+  // /assets/foo.js into /assets/assets/foo.js. Subpath builds may override it.
+  base: process.env.VITE_BASE_PATH || "/",
   build: {
     outDir: "dist/client",
     target: "es2022",
