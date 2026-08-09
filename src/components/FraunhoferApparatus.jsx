@@ -25,15 +25,15 @@ export function FraunhoferApparatus() {
             <stop offset="1" stopColor="#ffb23f" stopOpacity="0" />
           </radialGradient>
           <radialGradient id="apparatus-spot-glow">
-            <stop offset="0" stopColor="#eaffff" />
-            <stop offset="0.28" stopColor="#68eaff" stopOpacity="0.95" />
-            <stop offset="1" stopColor="#2f8fff" stopOpacity="0" />
+            <stop offset="0" stopColor="#fff8d2" />
+            <stop offset="0.28" stopColor="#ffd36b" stopOpacity="0.95" />
+            <stop offset="1" stopColor="#ffae36" stopOpacity="0" />
           </radialGradient>
           <filter id="apparatus-soft-glow" x="-80%" y="-80%" width="260%" height="260%">
             <feGaussianBlur stdDeviation="4" />
           </filter>
           <marker id="apparatus-ray-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-            <path d="M0,0 L6,3 L0,6 Z" fill="#44dcff" />
+            <path d="M0,0 L6,3 L0,6 Z" fill="#ffd36b" />
           </marker>
         </defs>
 
@@ -74,9 +74,9 @@ export function FraunhoferApparatus() {
           <line x1="938" y1="107" x2="938" y2="119" stroke="#315b94" strokeWidth="3" />
           <path d="M918 119H958" stroke="#315b94" strokeWidth="3" />
           <ellipse cx="934" cy="67" rx="15" ry="25" fill="url(#apparatus-spot-glow)" filter="url(#apparatus-soft-glow)" opacity="0.82" />
-          <ellipse cx="934" cy="67" rx="3.6" ry="8" fill="#b9f8ff" />
-          <ellipse cx="934" cy="50" rx="1.6" ry="4" fill="#58dfff" opacity="0.78" />
-          <ellipse cx="934" cy="84" rx="1.6" ry="4" fill="#58dfff" opacity="0.78" />
+          <ellipse cx="934" cy="67" rx="3.6" ry="8" fill="#fff0a3" />
+          <ellipse cx="934" cy="50" rx="1.6" ry="4" fill="#ffc857" opacity="0.78" />
+          <ellipse cx="934" cy="84" rx="1.6" ry="4" fill="#ffc857" opacity="0.78" />
         </g>
 
         <g className="apparatus-rays apparatus-rays-source">

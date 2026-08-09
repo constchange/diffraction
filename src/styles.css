@@ -187,7 +187,7 @@ input[type="range"] {
 
 .apparatus-rays-parallel,
 .apparatus-rays-diffracted {
-  stroke: #44dcff;
+  stroke: #ffd36b;
   stroke-width: 1.3;
   opacity: 0.82;
 }
@@ -332,6 +332,7 @@ input[type="range"] {
 
 .drawing-toolbar button,
 .canvas-actions > button,
+.repeat-menu > summary,
 .local-save-menu > summary {
   display: grid;
   width: 32px;
@@ -346,12 +347,14 @@ input[type="range"] {
 
 .drawing-toolbar button:hover,
 .canvas-actions > button:hover,
+.repeat-menu > summary:hover,
 .local-save-menu > summary:hover {
   color: #eaf2ff;
   background: #122a50;
 }
 
 .canvas-actions > button:disabled,
+.repeat-panel button:disabled,
 .local-save-panel button:disabled {
   opacity: 0.38;
   cursor: not-allowed;
@@ -380,8 +383,26 @@ input[type="range"] {
   touch-action: none;
 }
 
+.aperture-grid {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.aperture-grid line {
+  stroke: rgba(119, 154, 201, 0.22);
+  stroke-width: 0.24;
+  vector-effect: non-scaling-stroke;
+}
+
 .axis-label {
   position: absolute;
+  z-index: 2;
+  pointer-events: none;
   color: #6282ad;
   font-family: Georgia, serif;
   font-size: 11px;
@@ -400,6 +421,8 @@ input[type="range"] {
 
 .canvas-scale {
   position: absolute;
+  z-index: 2;
+  pointer-events: none;
   right: 0;
   bottom: -20px;
   left: 0;
@@ -420,6 +443,10 @@ input[type="range"] {
   background: #09162d;
 }
 
+.draw-controls.rectangle-controls {
+  grid-template-columns: 1fr 1fr 1fr auto;
+}
+
 .draw-controls label {
   display: grid;
   min-width: 0;
@@ -428,6 +455,10 @@ input[type="range"] {
   gap: 6px;
   color: #8195b5;
   font-size: 10px;
+}
+
+.draw-controls label.disabled {
+  opacity: 0.43;
 }
 
 .draw-controls label input {
@@ -463,24 +494,29 @@ input[type="range"] {
   line-height: 12px;
 }
 
+.repeat-menu,
 .local-save-menu {
   position: relative;
 }
 
+.repeat-menu > summary,
 .local-save-menu > summary {
   list-style: none;
   cursor: pointer;
 }
 
+.repeat-menu > summary::-webkit-details-marker,
 .local-save-menu > summary::-webkit-details-marker {
   display: none;
 }
 
+.repeat-menu[open] > summary,
 .local-save-menu[open] > summary {
   color: #fff;
   background: #1a4fb0;
 }
 
+.repeat-panel,
 .local-save-panel {
   position: absolute;
   z-index: 12;
@@ -497,6 +533,11 @@ input[type="range"] {
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.48);
 }
 
+.repeat-panel {
+  width: 232px;
+}
+
+.repeat-panel header,
 .local-save-panel header,
 .local-save-panel > div {
   display: flex;
@@ -505,15 +546,72 @@ input[type="range"] {
   gap: 6px;
 }
 
+.repeat-panel header strong,
 .local-save-panel header strong {
   color: #e7f0ff;
   font-size: 11px;
 }
 
+.repeat-panel header span,
 .local-save-panel header span {
   color: #5e9dff;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+.repeat-direction {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.repeat-direction button,
+.repeat-panel .repeat-apply {
+  display: flex;
+  min-height: 29px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #294a76;
+  border-radius: 6px;
+  color: #aac0df;
+  background: #0c1d39;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.repeat-direction button.active {
+  color: #fff;
+  border-color: #3d7de2;
+  background: #1c58c4;
+}
+
+.repeat-panel label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  color: #8fa6c8;
+  font-size: 9px;
+}
+
+.repeat-panel label input {
+  grid-column: 1 / -1;
+}
+
+.repeat-panel output {
+  color: #d7e5fb;
+  font-variant-numeric: tabular-nums;
+}
+
+.repeat-panel .repeat-apply {
+  color: #f0f6ff;
+  border-color: #2e6fd8;
+  background: #1d5ed4;
+}
+
+.repeat-panel .repeat-apply:hover:not(:disabled) {
+  border-color: #66a0ff;
+  background: #2872ee;
 }
 
 .local-save-panel select {
@@ -549,6 +647,7 @@ input[type="range"] {
   background: #153462;
 }
 
+.repeat-panel p,
 .local-save-panel p {
   min-height: 14px;
   margin: 0;
@@ -564,6 +663,26 @@ input[type="range"] {
   padding: 9px 11px 10px;
   border-top: 1px solid #14294a;
   background: #09162d;
+}
+
+.function-pause-notice {
+  grid-column: 1 / -1;
+  display: flex;
+  min-height: 21px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(83, 139, 219, 0.28);
+  border-radius: 6px;
+  padding: 3px 7px;
+  color: #87a9da;
+  background: rgba(30, 81, 156, 0.12);
+  font-size: 9px;
+}
+
+.function-pause-notice.paused {
+  color: #ffd983;
+  border-color: rgba(255, 198, 74, 0.32);
+  background: rgba(145, 90, 8, 0.12);
 }
 
 .preset-row {
@@ -1261,6 +1380,10 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 
+  .draw-controls.rectangle-controls {
+    grid-template-columns: 1fr;
+  }
+
   .canvas-actions {
     justify-content: end;
   }
@@ -1270,12 +1393,79 @@ input[type="range"] {
   }
 
   .preset-row,
+  .function-pause-notice,
   .formula-status {
     grid-column: auto;
   }
 
   .formula-preview {
     max-width: none;
+  }
+}
+
+@media (max-width: 960px) and (orientation: landscape) {
+  .apparatus-section {
+    height: 110px;
+  }
+
+  .experiment-deck {
+    min-height: 638px;
+  }
+
+  .optical-stage {
+    height: 560px;
+    min-height: 560px;
+    grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .optical-bridge {
+    flex-direction: column;
+  }
+
+  .optical-bridge::before,
+  .optical-bridge::after {
+    top: 50%;
+    bottom: auto;
+    width: 10px;
+    height: 0;
+    border-top: 1px solid #294f82;
+    border-left: 0;
+  }
+
+  .optical-bridge::before {
+    right: auto;
+    left: 0;
+  }
+
+  .optical-bridge::after {
+    right: 0;
+    left: auto;
+  }
+
+  .aperture-canvas-shell {
+    width: min(68%, 260px);
+  }
+
+  .observation-canvas-shell {
+    padding: 12px;
+  }
+
+  .diffraction-canvas {
+    width: min(88%, 300px);
+  }
+
+  .draw-controls,
+  .draw-controls.rectangle-controls {
+    min-height: 118px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 10px;
+  }
+
+  .canvas-actions {
+    grid-column: 1 / -1;
+    justify-content: end;
   }
 }
 

@@ -1,5 +1,6 @@
-\documentclass[tikz,border=8pt]{standalone}
+\documentclass[border=8pt]{standalone}
 \usepackage{ctex}
+\usepackage{tikz}
 \usetikzlibrary{arrows.meta,calc}
 
 \definecolor{labblue}{HTML}{5B9BFF}
@@ -13,7 +14,7 @@
   x=0.82cm,
   y=0.82cm,
   >={Latex[length=2.2mm,width=1.4mm]},
-  ray/.style={draw=labcyan,line width=0.75pt,-{Latex[length=1.7mm,width=1.1mm]}},
+  ray/.style={draw=labgold,line width=0.75pt,-{Latex[length=1.7mm,width=1.1mm]}},
   label/.style={font=\sffamily\footnotesize,text=labmuted,align=center}
 ]
   % Optical axis
@@ -55,9 +56,9 @@
   % Observation screen and diffraction marks
   \path[draw=labblue,fill=labblue!9,line width=0.9pt]
     (13.55,-1.48) -- (13.87,-1.27) -- (13.87,1.27) -- (13.55,1.48) -- cycle;
-  \fill[labcyan] (13.63,0) ellipse (1.4pt and 3.6pt);
-  \fill[labcyan!82] (13.63,0.45) ellipse (1.0pt and 2.4pt);
-  \fill[labcyan!82] (13.63,-0.45) ellipse (1.0pt and 2.4pt);
+  \fill[labgold] (13.63,0) ellipse (1.4pt and 3.6pt);
+  \fill[labgold!82] (13.63,0.45) ellipse (1.0pt and 2.4pt);
+  \fill[labgold!82] (13.63,-0.45) ellipse (1.0pt and 2.4pt);
 
   \node[label] at (0.85,-2.02) {光源};
   \node[label] at (3.25,-2.02) {凸透镜 $L_1$};

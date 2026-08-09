@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { paintSegmentInto, paintStamp, paintStampInto, pointInShape } from "../src/core/drawing.js";
+import {
+  paintRectangleInto,
+  paintSegmentInto,
+  paintStamp,
+  paintStampInto,
+  pointInShape,
+  repeatDrawingUnitInto,
+} from "../src/core/drawing.js";
 
 test("all built-in shape masks include their centre", () => {
   for (const shape of ["brush", "circle", "square", "rectangle", "hexagon", "triangle"]) {
@@ -77,4 +84,51 @@ test("anti-aliased built-in shapes remain exact integer translations", () => {
     }
   }
   assert.ok(first.some((value) => value > 0 && value < 1), "shape edge should contain partial coverage");
+});
+
+test("a dragged rectangle uses its two opposite vertices and exact edge coverage", () => {
+  const size = 16;
+  const amplitude = new Float32Array(size * size);
+  const phase = new Float32Array(size * size).fill(0.8);
+  paintRectangleInto({
+    amplitude,
+    phase,
+    size,
+    from: { x: 2.25, y: 3.5 },
+    to: { x: 8.75, y: 10.5 },
+    transmission: 1,
+  });
+
+  assert.equal(amplitude[5 * size + 5], 1);
+  assert.ok(Math.abs(amplitude[3 * size + 2] - 0.375) < 1e-6);
+  assert.equal(amplitude[2 * size + 2], 0);
+  assert.equal(phase[5 * size + 5], 0);
+});
+
+test("a drawing unit repeats with an edge-to-edge gap in either direction", () => {
+  const size = 48;
+  const horizontal = new Float32Array(size * size);
+  repeatDrawingUnitInto({
+    amplitude: horizontal,
+    phase: new Float32Array(horizontal.length),
+    size,
+    operations: [{ kind: "stamp", x: 8, y: 8, radius: 2, tool: "circle", transmission: 1 }],
+    count: 2,
+    spacing: 3,
+    direction: "horizontal",
+  });
+  assert.equal(horizontal[8 * size + 15], 1);
+  assert.equal(horizontal[8 * size + 22], 1);
+
+  const vertical = new Float32Array(size * size);
+  repeatDrawingUnitInto({
+    amplitude: vertical,
+    phase: new Float32Array(vertical.length),
+    size,
+    operations: [{ kind: "rectangle", from: { x: 5, y: 5 }, to: { x: 9, y: 11 }, transmission: 0.7 }],
+    count: 1,
+    spacing: 4,
+    direction: "vertical",
+  });
+  assert.ok(Math.abs(vertical[15 * size + 6] - 0.7) < 1e-6);
 });
