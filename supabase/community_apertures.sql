@@ -49,14 +49,29 @@ create table if not exists public.community_apertures (
   moderation jsonb not null default '{"method":"local-rules","status":"approved"}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint community_apertures_owner_slot_key unique (owner_hash, slot),
-  constraint community_apertures_format_check check (
-    aperture_data ->> 'format' = 'fraunhofer-aperture-v1'
-    and (aperture_data ->> 'size')::integer = 256
-    and jsonb_typeof(aperture_data -> 'amplitude') = 'string'
-    and jsonb_typeof(aperture_data -> 'phase') = 'string'
-  )
+  constraint community_apertures_owner_slot_key unique (owner_hash, slot)
 );
+
+-- 同时兼容绘制模式的复振幅光栅，以及只保存 LaTeX 文本的屏函数模式。
+-- drop/add 也会升级已执行过旧版 SQL 的现有数据库。
+alter table public.community_apertures
+  drop constraint if exists community_apertures_format_check;
+alter table public.community_apertures
+  add constraint community_apertures_format_check check (
+    (
+      aperture_data ->> 'format' = 'fraunhofer-aperture-v1'
+      and (aperture_data ->> 'size')::integer = 256
+      and jsonb_typeof(aperture_data -> 'amplitude') = 'string'
+      and jsonb_typeof(aperture_data -> 'phase') = 'string'
+    )
+    or
+    (
+      aperture_data ->> 'format' = 'fraunhofer-formula-v1'
+      and (aperture_data ->> 'size')::integer = 256
+      and jsonb_typeof(aperture_data -> 'formula') = 'string'
+      and char_length(trim(aperture_data ->> 'formula')) between 1 and 1200
+    )
+  );
 
 comment on table public.community_apertures is
   '公开衍射屏；owner_hash 是由 EdgeOne 服务端对真实 IP 加盐摘要后的值，不保存原始 IP。';

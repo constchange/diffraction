@@ -2,6 +2,7 @@ export const APERTURE_STORAGE_KEY = "fraunhofer-aperture-saves-v1";
 export const MAX_LOCAL_APERTURES = 5;
 
 const FORMAT = "fraunhofer-aperture-v1";
+const FORMULA_FORMAT = "fraunhofer-formula-v1";
 const CHUNK_SIZE = 0x8000;
 
 function bytesToBase64(bytes) {
@@ -61,6 +62,39 @@ export function decodeAperture(encoded, expectedSize) {
     phase[index] = (phaseView.getInt16(index * 2, true) / 32767) * Math.PI;
   }
   return { amplitude, phase };
+}
+
+export function encodeScreenDefinition({ mode, aperture, formula }, size) {
+  if (mode === "function") {
+    const normalizedFormula = typeof formula === "string" ? formula.trim() : "";
+    if (!normalizedFormula || normalizedFormula.length > 1200) {
+      throw new TypeError("屏函数需为 1–1200 个字符");
+    }
+    return {
+      format: FORMULA_FORMAT,
+      size,
+      formula: normalizedFormula,
+    };
+  }
+  return encodeAperture(aperture, size);
+}
+
+export function decodeScreenDefinition(encoded, expectedSize) {
+  if (encoded?.format === FORMULA_FORMAT) {
+    const formula = typeof encoded.formula === "string" ? encoded.formula.trim() : "";
+    if (encoded.size !== expectedSize || !formula || formula.length > 1200) {
+      throw new TypeError("屏函数存档格式或采样尺寸不兼容");
+    }
+    return { mode: "function", formula };
+  }
+  return {
+    mode: "draw",
+    aperture: decodeAperture(encoded, expectedSize),
+  };
+}
+
+export function screenDefinitionMode(encoded) {
+  return encoded?.format === FORMULA_FORMAT ? "function" : "draw";
 }
 
 export function readLocalApertures(storage, expectedSize) {

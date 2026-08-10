@@ -989,6 +989,12 @@ input[type="range"] {
   color: #ff8396;
 }
 
+.formula-utility-actions {
+  grid-column: 1 / -1;
+  padding-top: 2px;
+  border-top: 1px solid rgba(40, 68, 111, 0.55);
+}
+
 .optical-bridge {
   position: relative;
   display: flex;

@@ -66,7 +66,8 @@ export async function onRequestPost({ request, env }) {
     const ownerHash = await ownerHashFor(request, env);
     const terms = await getModerationTerms(env);
     moderateTextFields(upload, terms);
-    const validated = await validateApertureData(upload.apertureData);
+    const validated = await validateApertureData(upload.apertureData, upload.previewApertureData);
+    moderateTextFields({ formula: validated.formula }, terms);
     await assertPatternAllowed(env, validated.patternHash);
 
     const existingQuery = `community_apertures?select=id&owner_hash=eq.${ownerHash}&slot=eq.${upload.slot}&limit=1`;

@@ -10,6 +10,7 @@ import { Sparkle } from "@phosphor-icons/react/Sparkle";
 import { WaveSine } from "@phosphor-icons/react/WaveSine";
 import katex from "katex";
 import { createAperture, APERTURE_SIZE, apertureStats } from "../core/aperture.js";
+import { FORMULA_PRESETS } from "../core/presets.js";
 import { useDiffraction } from "../hooks/useDiffraction.js";
 import { ApertureEditor } from "./ApertureEditor.jsx";
 import { DiffractionCanvas } from "./DiffractionCanvas.jsx";
@@ -59,6 +60,7 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
   const [autoRun, setAutoRun] = useState(true);
   const [zoom, setZoom] = useState(1.45);
   const [editorMode, setEditorMode] = useState("draw");
+  const [screenFormula, setScreenFormula] = useState(FORMULA_PRESETS.find((preset) => preset.id === "double-slit").latex);
   const [displayMode, setDisplayMode] = useState("enhanced");
   const [toast, setToast] = useState("");
   const [communityOpen, setCommunityOpen] = useState(false);
@@ -108,10 +110,17 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
     announce("光屏图样已保存");
   }
 
-  const loadCommunityAperture = useCallback((next, item) => {
-    setCurrentAperture(next);
-    setStats(apertureStats(next.amplitude));
-    submitAperture(next, { quality: "final" });
+  const loadCommunityAperture = useCallback((savedScreen, item) => {
+    if (savedScreen.mode === "function") {
+      setScreenFormula(savedScreen.formula);
+      setEditorMode("function");
+    } else {
+      const next = savedScreen.aperture;
+      setEditorMode("draw");
+      setCurrentAperture(next);
+      setStats(apertureStats(next.amplitude));
+      submitAperture(next, { quality: "final" });
+    }
     announce(`已载入“${item.patternName}”`);
   }, [announce, submitAperture]);
 
@@ -138,7 +147,10 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
                 size={APERTURE_SIZE}
                 onChange={commitAperture}
                 onPreview={submitAperture}
+                mode={editorMode}
+                formula={screenFormula}
                 onModeChange={setEditorMode}
+                onFormulaChange={setScreenFormula}
                 onFunctionEditStart={pauseForFunctionEdit}
                 onOpenCommunity={() => setCommunityOpen(true)}
                 isRenderingPaused={!autoRun}
@@ -242,6 +254,8 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
       <CommunityApertures
         open={communityOpen}
         aperture={currentAperture}
+        mode={editorMode}
+        formula={screenFormula}
         size={APERTURE_SIZE}
         apiBase={communityApiBase}
         onLoad={loadCommunityAperture}

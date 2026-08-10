@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   APERTURE_STORAGE_KEY,
   decodeAperture,
+  decodeScreenDefinition,
   encodeAperture,
+  encodeScreenDefinition,
   readLocalApertures,
   writeLocalApertures,
 } from "../src/core/apertureStorage.js";
@@ -42,4 +44,29 @@ test("local aperture collection rejects a sixth save", () => {
   assert.equal(readLocalApertures(storage, 8).length, 5);
   assert.ok(values.has(APERTURE_STORAGE_KEY));
   assert.throws(() => writeLocalApertures(storage, [...items, items[0]]), /最多保存 5 个/);
+});
+
+test("screen definitions preserve function text without rasterizing it", () => {
+  const formula = String.raw`\operatorname{rect}\left(\frac{x}{0.2}\right)`;
+  const encoded = encodeScreenDefinition({ mode: "function", formula }, 256);
+  assert.deepEqual(encoded, {
+    format: "fraunhofer-formula-v1",
+    size: 256,
+    formula,
+  });
+  assert.deepEqual(decodeScreenDefinition(encoded, 256), { mode: "function", formula });
+  assert.equal("amplitude" in encoded, false);
+  assert.equal("phase" in encoded, false);
+});
+
+test("legacy raster saves load as drawing-mode definitions", () => {
+  const size = 8;
+  const aperture = {
+    amplitude: new Float32Array(size * size),
+    phase: new Float32Array(size * size),
+  };
+  aperture.amplitude[12] = 0.75;
+  const restored = decodeScreenDefinition(encodeAperture(aperture, size), size);
+  assert.equal(restored.mode, "draw");
+  assert.ok(Math.abs(restored.aperture.amplitude[12] - 0.75) <= 1 / 255);
 });
