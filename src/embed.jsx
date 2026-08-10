@@ -26,7 +26,12 @@ export function mountFraunhoferLab(element, options = {}) {
   ensureStyles();
   mountedRoots.get(element)?.unmount();
   const root = createRoot(element);
-  const lab = <FraunhoferLab compact={Boolean(options.compact)} />;
+  const lab = (
+    <FraunhoferLab
+      compact={Boolean(options.compact)}
+      communityApiBase={options.communityApiBase || "/api/community-apertures"}
+    />
+  );
   root.render(options.strict ? <React.StrictMode>{lab}</React.StrictMode> : lab);
   mountedRoots.set(element, root);
   return () => {

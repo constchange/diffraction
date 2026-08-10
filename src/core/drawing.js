@@ -86,6 +86,19 @@ export function paintRectangleInto({ amplitude, phase, size, from, to, transmiss
   return { amplitude, phase };
 }
 
+function pointInPolygon(vertices, x, y) {
+  let inside = false;
+  for (let current = 0, previous = vertices.length - 1; current < vertices.length; previous = current, current += 1) {
+    const currentVertex = vertices[current];
+    const previousVertex = vertices[previous];
+    const crosses = (currentVertex.y > y) !== (previousVertex.y > y)
+      && x < ((previousVertex.x - currentVertex.x) * (y - currentVertex.y))
+        / (previousVertex.y - currentVertex.y) + currentVertex.x;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
 function distanceToSegment(px, py, fromX, fromY, toX, toY) {
   const dx = toX - fromX;
   const dy = toY - fromY;
@@ -93,6 +106,61 @@ function distanceToSegment(px, py, fromX, fromY, toX, toY) {
   if (lengthSquared === 0) return Math.hypot(px - fromX, py - fromY);
   const t = Math.max(0, Math.min(1, ((px - fromX) * dx + (py - fromY) * dy) / lengthSquared));
   return Math.hypot(px - (fromX + t * dx), py - (fromY + t * dy));
+}
+
+function distanceToPolygonEdge(vertices, x, y) {
+  let distance = Infinity;
+  for (let index = 0; index < vertices.length; index += 1) {
+    const from = vertices[index];
+    const to = vertices[(index + 1) % vertices.length];
+    distance = Math.min(distance, distanceToSegment(x, y, from.x, from.y, to.x, to.y));
+  }
+  return distance;
+}
+
+export function paintPolygonInto({
+  amplitude,
+  phase,
+  size,
+  vertices,
+  filled,
+  lineWidth,
+  transmission,
+}) {
+  if (!vertices || vertices.length < 3) return { amplitude, phase };
+  const radius = Math.max(0.5, lineWidth / 2);
+  const padding = filled ? 1 : radius + 1;
+  const minimumX = Math.max(0, Math.floor(Math.min(...vertices.map((point) => point.x)) - padding));
+  const maximumX = Math.min(size - 1, Math.ceil(Math.max(...vertices.map((point) => point.x)) + padding));
+  const minimumY = Math.max(0, Math.floor(Math.min(...vertices.map((point) => point.y)) - padding));
+  const maximumY = Math.min(size - 1, Math.ceil(Math.max(...vertices.map((point) => point.y)) + padding));
+  const value = Math.max(0, Math.min(1, transmission));
+  const samples = filled ? 4 : 2;
+
+  for (let y = minimumY; y <= maximumY; y += 1) {
+    for (let x = minimumX; x <= maximumX; x += 1) {
+      let inside = 0;
+      for (let sy = 0; sy < samples; sy += 1) {
+        for (let sx = 0; sx < samples; sx += 1) {
+          const sampleX = x + (sx + 0.5) / samples;
+          const sampleY = y + (sy + 0.5) / samples;
+          const covered = filled
+            ? pointInPolygon(vertices, sampleX, sampleY)
+            : distanceToPolygonEdge(vertices, sampleX, sampleY) <= radius;
+          if (covered) inside += 1;
+        }
+      }
+      applyCoverage(
+        amplitude,
+        phase,
+        y * size + x,
+        value,
+        inside / (samples * samples),
+        false,
+      );
+    }
+  }
+  return { amplitude, phase };
 }
 
 export function paintSegmentInto({ amplitude, phase, size, from, to, radius, tool, transmission }) {
@@ -149,6 +217,20 @@ export function paintDrawingOperationInto({ amplitude, phase, size, operation, o
       transmission: operation.transmission,
     });
   }
+  if (operation.kind === "polygon") {
+    return paintPolygonInto({
+      amplitude,
+      phase,
+      size,
+      vertices: operation.vertices.map((point) => ({
+        x: point.x + offsetX,
+        y: point.y + offsetY,
+      })),
+      filled: operation.filled,
+      lineWidth: operation.lineWidth,
+      transmission: operation.transmission,
+    });
+  }
   return paintStampInto({
     amplitude,
     phase,
@@ -173,6 +255,14 @@ export function drawingUnitBounds(operations) {
       right = Math.max(right, operation.from.x, operation.to.x);
       top = Math.min(top, operation.from.y, operation.to.y);
       bottom = Math.max(bottom, operation.from.y, operation.to.y);
+      continue;
+    }
+    if (operation.kind === "polygon") {
+      const padding = operation.filled ? 0 : operation.lineWidth / 2;
+      left = Math.min(left, ...operation.vertices.map((point) => point.x - padding));
+      right = Math.max(right, ...operation.vertices.map((point) => point.x + padding));
+      top = Math.min(top, ...operation.vertices.map((point) => point.y - padding));
+      bottom = Math.max(bottom, ...operation.vertices.map((point) => point.y + padding));
       continue;
     }
     const minimumX = operation.kind === "segment"
@@ -223,6 +313,36 @@ export function repeatDrawingUnitInto({
     }
   }
   return { amplitude, phase };
+}
+
+export function moveApertureSelection({ amplitude, phase, size, bounds, offsetX, offsetY }) {
+  const dx = Math.round(offsetX);
+  const dy = Math.round(offsetY);
+  const nextAmplitude = new Float32Array(amplitude);
+  const nextPhase = new Float32Array(phase);
+
+  for (let y = bounds.top; y < bounds.bottom; y += 1) {
+    for (let x = bounds.left; x < bounds.right; x += 1) {
+      const sourceIndex = y * size + x;
+      nextAmplitude[sourceIndex] = 0;
+      nextPhase[sourceIndex] = 0;
+    }
+  }
+
+  for (let y = bounds.top; y < bounds.bottom; y += 1) {
+    const destinationY = y + dy;
+    if (destinationY < 0 || destinationY >= size) continue;
+    for (let x = bounds.left; x < bounds.right; x += 1) {
+      const destinationX = x + dx;
+      if (destinationX < 0 || destinationX >= size) continue;
+      const sourceIndex = y * size + x;
+      const destinationIndex = destinationY * size + destinationX;
+      nextAmplitude[destinationIndex] = amplitude[sourceIndex];
+      nextPhase[destinationIndex] = phase[sourceIndex];
+    }
+  }
+
+  return { amplitude: nextAmplitude, phase: nextPhase };
 }
 
 export function paintStamp({ aperture, ...stamp }) {

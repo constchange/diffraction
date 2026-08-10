@@ -1,22 +1,31 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
+import { ArrowsOutCardinal } from "@phosphor-icons/react/ArrowsOutCardinal";
+import { Check } from "@phosphor-icons/react/Check";
 import { Circle } from "@phosphor-icons/react/Circle";
 import { Eraser } from "@phosphor-icons/react/Eraser";
 import { FloppyDisk } from "@phosphor-icons/react/FloppyDisk";
 import { FolderOpen } from "@phosphor-icons/react/FolderOpen";
 import { Function as FunctionIcon } from "@phosphor-icons/react/Function";
+import { GlobeHemisphereWest } from "@phosphor-icons/react/GlobeHemisphereWest";
 import { Hexagon } from "@phosphor-icons/react/Hexagon";
+import { LineSegment } from "@phosphor-icons/react/LineSegment";
 import { Pause } from "@phosphor-icons/react/Pause";
 import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { Polygon } from "@phosphor-icons/react/Polygon";
 import { Rectangle } from "@phosphor-icons/react/Rectangle";
 import { Repeat } from "@phosphor-icons/react/Repeat";
+import { Selection } from "@phosphor-icons/react/Selection";
 import { Square } from "@phosphor-icons/react/Square";
 import { Trash } from "@phosphor-icons/react/Trash";
 import { Triangle } from "@phosphor-icons/react/Triangle";
+import { X } from "@phosphor-icons/react/X";
 import katex from "katex";
 import { FORMULA_PRESETS } from "../core/presets.js";
 import {
+  moveApertureSelection,
   paintDrawingOperationInto,
+  paintPolygonInto,
   paintRectangleInto,
   repeatDrawingUnitInto,
 } from "../core/drawing.js";
@@ -30,15 +39,21 @@ import {
 
 const UNDO_LIMIT = 3;
 const CONTINUOUS_TOOLS = new Set(["brush", "eraser"]);
+const THROTTLED_PREVIEW_TOOLS = new Set(["line", "rectangle", "polygon", "move"]);
+const PREVIEW_INTERVAL_MS = 90;
 const GRID_LINES = Array.from({ length: 16 }, (_, index) => ((index + 1) * 100) / 17);
 
 const TOOLS = [
-  { id: "brush", label: "画笔", Icon: PencilSimple },
+  { id: "brush", label: "自由画笔", Icon: PencilSimple },
+  { id: "line", label: "直线", Icon: LineSegment },
   { id: "circle", label: "圆", Icon: Circle },
   { id: "square", label: "正方形", Icon: Square },
   { id: "rectangle", label: "长方形", Icon: Rectangle },
+  { id: "polygon", label: "多边形", Icon: Polygon },
   { id: "hexagon", label: "六边形", Icon: Hexagon },
   { id: "triangle", label: "三角形", Icon: Triangle },
+  { id: "select", label: "矩形选框", Icon: Selection },
+  { id: "move", label: "移动选区", Icon: ArrowsOutCardinal },
   { id: "eraser", label: "橡皮", Icon: Eraser },
 ];
 
@@ -49,6 +64,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   onPreview,
   onModeChange,
   onFunctionEditStart,
+  onOpenCommunity,
   isRenderingPaused = false,
 }) {
   const canvasRef = useRef(null);
@@ -63,7 +79,13 @@ export const ApertureEditor = memo(function ApertureEditor({
   const activeOperationsRef = useRef([]);
   const lastUnitRef = useRef(null);
   const editableRectangleRef = useRef(null);
+  const selectionRef = useRef(null);
+  const selectionOriginRef = useRef(null);
+  const moveOffsetRef = useRef({ x: 0, y: 0 });
+  const polygonVerticesRef = useRef([]);
+  const polygonCursorRef = useRef(null);
   const drawingFrameRef = useRef(null);
+  const lastPreviewFrameRef = useRef(-Infinity);
   const mutationRevisionRef = useRef(0);
   const publishedRevisionRef = useRef(-1);
   const historyRef = useRef([]);
@@ -75,6 +97,10 @@ export const ApertureEditor = memo(function ApertureEditor({
   const [rectangleWidth, setRectangleWidth] = useState(48);
   const [rectangleHeight, setRectangleHeight] = useState(28);
   const [rectangleEditable, setRectangleEditable] = useState(false);
+  const [selection, setSelection] = useState(null);
+  const [polygonVertices, setPolygonVertices] = useState([]);
+  const [polygonFilled, setPolygonFilled] = useState(true);
+  const [toolMessage, setToolMessage] = useState("拖曳画笔或选择一个形状开始绘制");
   const [transmission, setTransmission] = useState(1);
   const [repeatCount, setRepeatCount] = useState(2);
   const [repeatSpacing, setRepeatSpacing] = useState(12);
@@ -121,6 +147,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       if (payload.type === "formula-result") {
         saveHistory();
         invalidateLastUnit();
+        clearSelection();
         const next = { amplitude: payload.amplitude, phase: payload.phase };
         apertureRef.current = next;
         renderAmplitude(next.amplitude);
@@ -146,6 +173,26 @@ export const ApertureEditor = memo(function ApertureEditor({
     }, 460);
     return () => window.clearTimeout(timer);
   }, [formula, mode, size]);
+
+  useEffect(() => {
+    if (mode !== "draw" || tool !== "polygon") return undefined;
+    function handleKeyDown(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finishPolygon();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        cancelPolygon();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mode, tool, polygonVertices.length, polygonFilled, brushSize, transmission]);
+
+  useEffect(() => {
+    if (tool !== "polygon" || polygonVertices.length === 0) return;
+    previewPolygon(polygonCursorRef.current);
+  }, [polygonFilled, brushSize, transmission]);
 
   function renderAmplitude(amplitude) {
     const canvas = canvasRef.current;
@@ -214,6 +261,41 @@ export const ApertureEditor = memo(function ApertureEditor({
       amplitude: new Float32Array(source.amplitude),
       phase: new Float32Array(source.phase),
     };
+  }
+
+  function updateSelection(next) {
+    selectionRef.current = next;
+    setSelection(next);
+  }
+
+  function clearSelection() {
+    selectionOriginRef.current = null;
+    updateSelection(null);
+  }
+
+  function marqueeBounds(from, to, roundToPixels = false) {
+    const left = Math.max(0, Math.min(size, Math.min(from.x, to.x)));
+    const right = Math.max(0, Math.min(size, Math.max(from.x, to.x)));
+    const top = Math.max(0, Math.min(size, Math.min(from.y, to.y)));
+    const bottom = Math.max(0, Math.min(size, Math.max(from.y, to.y)));
+    if (!roundToPixels) return { left, right, top, bottom };
+    const normalized = {
+      left: Math.floor(left),
+      right: Math.ceil(right),
+      top: Math.floor(top),
+      bottom: Math.ceil(bottom),
+    };
+    return normalized.right > normalized.left && normalized.bottom > normalized.top
+      ? normalized
+      : null;
+  }
+
+  function pointInsideSelection(point, activeSelection = selectionRef.current) {
+    return Boolean(activeSelection
+      && point.x >= activeSelection.left
+      && point.x < activeSelection.right
+      && point.y >= activeSelection.top
+      && point.y < activeSelection.bottom);
   }
 
   function previewWorkingAperture() {
@@ -294,6 +376,202 @@ export const ApertureEditor = memo(function ApertureEditor({
     previewWorkingAperture();
   }
 
+  function lineOperation(from, to) {
+    return {
+      kind: "segment",
+      from,
+      to,
+      radius: Math.max(0.5, (brushSize * to.scale) / 2),
+      tool: "brush",
+      transmission,
+    };
+  }
+
+  function previewLine(to) {
+    const base = drawingBaseRef.current;
+    const from = previousPointRef.current;
+    if (!base || !from) return;
+    const working = cloneAperture(base);
+    paintDrawingOperationInto({
+      amplitude: working.amplitude,
+      phase: working.phase,
+      size,
+      operation: lineOperation(from, to),
+    });
+    strokeApertureRef.current = working;
+    apertureRef.current = working;
+    mutationRevisionRef.current += 1;
+    renderAmplitude(working.amplitude);
+    previewWorkingAperture();
+  }
+
+  function polygonOperation(vertices = polygonVerticesRef.current) {
+    const scale = vertices[0]?.scale ?? 1;
+    return {
+      kind: "polygon",
+      vertices: vertices.map(({ x, y }) => ({ x, y })),
+      filled: polygonFilled,
+      lineWidth: Math.max(1, brushSize * scale),
+      transmission,
+    };
+  }
+
+  function previewPolygon(cursor = polygonCursorRef.current) {
+    const base = drawingBaseRef.current;
+    const fixedVertices = polygonVerticesRef.current;
+    if (!base || fixedVertices.length === 0) return;
+    polygonCursorRef.current = cursor;
+    const vertices = cursor ? [...fixedVertices, cursor] : fixedVertices;
+    const working = cloneAperture(base);
+    if (vertices.length >= 3) {
+      paintPolygonInto({
+        amplitude: working.amplitude,
+        phase: working.phase,
+        size,
+        ...polygonOperation(vertices),
+      });
+    } else if (vertices.length === 2) {
+      paintDrawingOperationInto({
+        amplitude: working.amplitude,
+        phase: working.phase,
+        size,
+        operation: lineOperation(vertices[0], vertices[1]),
+      });
+    }
+    strokeApertureRef.current = working;
+    apertureRef.current = working;
+    mutationRevisionRef.current += 1;
+    renderAmplitude(working.amplitude);
+    previewWorkingAperture();
+  }
+
+  function addPolygonVertex(event) {
+    const point = canvasPoint(event);
+    if (event.detail > 1 && polygonVerticesRef.current.length >= 3) {
+      finishPolygon();
+      return;
+    }
+    if (polygonVerticesRef.current.length === 0) {
+      saveHistory();
+      invalidateLastUnit();
+      clearSelection();
+      drawingBaseRef.current = apertureRef.current;
+      mutationRevisionRef.current = 0;
+      publishedRevisionRef.current = -1;
+      lastPreviewFrameRef.current = -Infinity;
+    }
+    const vertices = [...polygonVerticesRef.current, point];
+    polygonVerticesRef.current = vertices;
+    polygonCursorRef.current = null;
+    setPolygonVertices(vertices);
+    setToolMessage(`${vertices.length} 个顶点 · 双击、按 Enter 或点击“完成多边形”闭合`);
+    previewPolygon(null);
+  }
+
+  function finishPolygon() {
+    const vertices = polygonVerticesRef.current;
+    const base = drawingBaseRef.current;
+    if (!base || vertices.length < 3) {
+      setToolMessage("至少需要 3 个顶点才能完成多边形");
+      return;
+    }
+    const operation = polygonOperation(vertices);
+    const next = cloneAperture(base);
+    paintDrawingOperationInto({
+      amplitude: next.amplitude,
+      phase: next.phase,
+      size,
+      operation,
+    });
+    apertureRef.current = next;
+    strokeApertureRef.current = null;
+    lastUnitRef.current = { operations: [operation] };
+    setHasRepeatableUnit(true);
+    setRepeatMessage("可重复最近一次绘制单元");
+    renderAmplitude(next.amplitude);
+    onChange(next, { quality: "final" });
+    polygonVerticesRef.current = [];
+    polygonCursorRef.current = null;
+    drawingBaseRef.current = null;
+    setPolygonVertices([]);
+    setToolMessage("多边形已完成；继续点击可绘制下一个");
+  }
+
+  function cancelPolygon(publish = true) {
+    if (polygonVerticesRef.current.length === 0) return false;
+    const base = drawingBaseRef.current;
+    if (base) {
+      apertureRef.current = base;
+      strokeApertureRef.current = null;
+      renderAmplitude(base.amplitude);
+      if (publish) onChange(base, { quality: "final" });
+      historyRef.current.pop();
+      setUndoCount(historyRef.current.length);
+    }
+    polygonVerticesRef.current = [];
+    polygonCursorRef.current = null;
+    drawingBaseRef.current = null;
+    setPolygonVertices([]);
+    setToolMessage("已取消未完成的多边形");
+    return true;
+  }
+
+  function chooseTool(nextTool) {
+    if (tool === "polygon" && nextTool !== "polygon") cancelPolygon();
+    if (!new Set(["select", "move"]).has(nextTool)) clearSelection();
+    setTool(nextTool);
+    const messages = {
+      select: "在衍射屏上拖曳一个矩形选区",
+      move: selectionRef.current ? "在选区内按住并拖曳以移动内容" : "请先用矩形选框建立选区",
+      line: "按住并拖曳，松开后得到一条直线",
+      polygon: "逐点点击添加顶点；双击或按 Enter 完成",
+    };
+    setToolMessage(messages[nextTool] ?? "点击或拖曳，在衍射屏上绘制透光区域");
+  }
+
+  function changeEditorMode(nextMode) {
+    if (nextMode !== "draw") {
+      cancelPolygon();
+      clearSelection();
+    }
+    setMode(nextMode);
+  }
+
+  function previewSelectionMove(to) {
+    const base = drawingBaseRef.current;
+    const original = selectionOriginRef.current;
+    const from = previousPointRef.current;
+    if (!base || !original || !from) return;
+    const offsetX = Math.max(
+      -original.left,
+      Math.min(size - original.right, Math.round(to.x - from.x)),
+    );
+    const offsetY = Math.max(
+      -original.top,
+      Math.min(size - original.bottom, Math.round(to.y - from.y)),
+    );
+    moveOffsetRef.current = { x: offsetX, y: offsetY };
+    const working = moveApertureSelection({
+      amplitude: base.amplitude,
+      phase: base.phase,
+      size,
+      bounds: original,
+      offsetX,
+      offsetY,
+    });
+    strokeApertureRef.current = working;
+    apertureRef.current = working;
+    updateSelection({
+      left: original.left + offsetX,
+      right: original.right + offsetX,
+      top: original.top + offsetY,
+      bottom: original.bottom + offsetY,
+    });
+    mutationRevisionRef.current += 1;
+    renderAmplitude(working.amplitude);
+    previewWorkingAperture();
+  }
+
   function updateEditableRectangle(dimension, value) {
     const editable = editableRectangleRef.current;
     if (!editable) return;
@@ -338,6 +616,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       setRepeatMessage("请先绘制一个单元");
       return;
     }
+    clearSelection();
     saveHistory();
     const next = cloneAperture(apertureRef.current);
     repeatDrawingUnitInto({
@@ -359,44 +638,93 @@ export const ApertureEditor = memo(function ApertureEditor({
     );
   }
 
-  function flushPendingPoint() {
-    drawingFrameRef.current = null;
-    const next = pendingPointRef.current;
-    pendingPointRef.current = null;
-    if (!next || !drawingRef.current) return;
-    if (tool === "rectangle") {
-      previewRectangle(next);
+  function flushPendingPoint(timestamp) {
+    if (
+      THROTTLED_PREVIEW_TOOLS.has(tool)
+      && timestamp - lastPreviewFrameRef.current < PREVIEW_INTERVAL_MS
+    ) {
+      drawingFrameRef.current = requestAnimationFrame(flushPendingPoint);
       return;
     }
-    const previous = previousPointRef.current ?? next;
-    drawSegment(previous, next);
-    previousPointRef.current = next;
+    drawingFrameRef.current = null;
+    lastPreviewFrameRef.current = timestamp;
+    const next = pendingPointRef.current;
+    pendingPointRef.current = null;
+    if (!next) return;
+    if (tool === "polygon" && polygonVerticesRef.current.length > 0) {
+      previewPolygon(next);
+      return;
+    }
+    if (!drawingRef.current) return;
+    if (tool === "select") {
+      updateSelection(marqueeBounds(previousPointRef.current, next));
+    } else if (tool === "move") {
+      previewSelectionMove(next);
+    } else if (tool === "rectangle") {
+      previewRectangle(next);
+    } else if (tool === "line") {
+      previewLine(next);
+    } else {
+      const previous = previousPointRef.current ?? next;
+      drawSegment(previous, next);
+      previousPointRef.current = next;
+    }
   }
 
   function handlePointerDown(event) {
     if (mode !== "draw" || event.button !== 0) return;
+    if (tool === "polygon") {
+      addPolygonVertex(event);
+      return;
+    }
+    const rawPoint = canvasPoint(event);
+    if (tool === "move" && !pointInsideSelection(rawPoint)) {
+      setToolMessage(selectionRef.current ? "请在选区内部按下并拖曳" : "请先用矩形选框建立选区");
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
+    drawingRef.current = true;
+    previousPointRef.current = rawPoint;
+    pendingPointRef.current = null;
+    mutationRevisionRef.current = 0;
+    publishedRevisionRef.current = -1;
+    lastPreviewFrameRef.current = -Infinity;
+
+    if (tool === "select") {
+      selectionOriginRef.current = selectionRef.current;
+      updateSelection(marqueeBounds(rawPoint, rawPoint));
+      return;
+    }
+
     saveHistory();
     const current = apertureRef.current;
     invalidateLastUnit();
     drawingBaseRef.current = current;
     activeOperationsRef.current = [];
+    if (tool === "move") {
+      selectionOriginRef.current = selectionRef.current;
+      moveOffsetRef.current = { x: 0, y: 0 };
+      strokeApertureRef.current = current;
+      return;
+    }
+
+    clearSelection();
     const workingAperture = cloneAperture(current);
     strokeApertureRef.current = workingAperture;
     apertureRef.current = workingAperture;
-    mutationRevisionRef.current = 0;
-    publishedRevisionRef.current = -1;
-    drawingRef.current = true;
-    const rawPoint = canvasPoint(event);
-    const point = CONTINUOUS_TOOLS.has(tool) || tool === "rectangle"
+    const point = CONTINUOUS_TOOLS.has(tool) || ["rectangle", "line"].includes(tool)
       ? rawPoint
       : { ...rawPoint, x: Math.floor(rawPoint.x) + 0.5, y: Math.floor(rawPoint.y) + 0.5 };
     previousPointRef.current = point;
-    if (tool !== "rectangle") commitPoints([point]);
+    if (!["rectangle", "line"].includes(tool)) commitPoints([point]);
   }
 
   function handlePointerMove(event) {
-    if (!drawingRef.current || mode !== "draw" || (!CONTINUOUS_TOOLS.has(tool) && tool !== "rectangle")) return;
+    if (mode !== "draw") return;
+    const polygonActive = tool === "polygon" && polygonVerticesRef.current.length > 0;
+    const dragTool = CONTINUOUS_TOOLS.has(tool)
+      || ["rectangle", "line", "select", "move"].includes(tool);
+    if (!polygonActive && (!drawingRef.current || !dragTool)) return;
     pendingPointRef.current = canvasPoint(event);
     if (drawingFrameRef.current === null) {
       drawingFrameRef.current = requestAnimationFrame(flushPendingPoint);
@@ -404,18 +732,54 @@ export const ApertureEditor = memo(function ApertureEditor({
   }
 
   function handlePointerUp(event) {
+    if (!drawingRef.current) return;
     if (drawingFrameRef.current !== null) {
       cancelAnimationFrame(drawingFrameRef.current);
       drawingFrameRef.current = null;
     }
+    const nextPoint = pendingPointRef.current ?? canvasPoint(event);
+
+    if (tool === "select") {
+      const nextSelection = marqueeBounds(previousPointRef.current, nextPoint, true);
+      updateSelection(nextSelection);
+      setToolMessage(nextSelection
+        ? `已选择 ${nextSelection.right - nextSelection.left} × ${nextSelection.bottom - nextSelection.top} px；切换到“移动选区”即可拖动`
+        : "选区过小，请重新拖曳");
+      finishPointerInteraction(event);
+      return;
+    }
+
+    if (tool === "move") {
+      previewSelectionMove(nextPoint);
+      const { x, y } = moveOffsetRef.current;
+      const working = strokeApertureRef.current;
+      if (working && (x !== 0 || y !== 0)) {
+        apertureRef.current = working;
+        onChange(working, { quality: "final" });
+        setToolMessage(`选区已移动：Δx = ${x}px，Δy = ${y}px`);
+      } else {
+        const base = drawingBaseRef.current;
+        apertureRef.current = base;
+        strokeApertureRef.current = null;
+        renderAmplitude(base.amplitude);
+        updateSelection(selectionOriginRef.current);
+        historyRef.current.pop();
+        setUndoCount(historyRef.current.length);
+        setToolMessage("选区位置未改变");
+      }
+      finishPointerInteraction(event);
+      return;
+    }
+
     if (drawingRef.current && mode === "draw" && CONTINUOUS_TOOLS.has(tool)) {
-      const next = pendingPointRef.current ?? canvasPoint(event);
-      const previous = previousPointRef.current ?? next;
-      if (Math.hypot(next.x - previous.x, next.y - previous.y) > 0.1) drawSegment(previous, next);
+      const previous = previousPointRef.current ?? nextPoint;
+      if (Math.hypot(nextPoint.x - previous.x, nextPoint.y - previous.y) > 0.1) {
+        drawSegment(previous, nextPoint);
+      }
     }
     if (drawingRef.current && mode === "draw" && tool === "rectangle") {
       const from = previousPointRef.current;
-      const to = pendingPointRef.current ?? canvasPoint(event);
+      const to = nextPoint;
       const width = Math.abs(to.x - from.x);
       const height = Math.abs(to.y - from.y);
       if (width >= 1 && height >= 1) {
@@ -440,6 +804,21 @@ export const ApertureEditor = memo(function ApertureEditor({
         setUndoCount(historyRef.current.length);
       }
     }
+    if (drawingRef.current && mode === "draw" && tool === "line") {
+      const from = previousPointRef.current;
+      const distance = Math.hypot(nextPoint.x - from.x, nextPoint.y - from.y);
+      if (distance >= 0.5) {
+        previewLine(nextPoint);
+        activeOperationsRef.current = [lineOperation(from, nextPoint)];
+        setToolMessage(`直线已完成 · 线宽 ${brushSize}px`);
+      } else {
+        apertureRef.current = drawingBaseRef.current;
+        strokeApertureRef.current = null;
+        renderAmplitude(drawingBaseRef.current.amplitude);
+        historyRef.current.pop();
+        setUndoCount(historyRef.current.length);
+      }
+    }
     const working = strokeApertureRef.current;
     const finalSnapshot = working && activeOperationsRef.current.length
       ? cloneAperture(working)
@@ -454,9 +833,16 @@ export const ApertureEditor = memo(function ApertureEditor({
       setRepeatMessage("可重复最近一次绘制单元");
       onChange(finalSnapshot, { quality: "final" });
     }
+    finishPointerInteraction(event);
+  }
+
+  function finishPointerInteraction(event) {
+    pendingPointRef.current = null;
+    previousPointRef.current = null;
     drawingBaseRef.current = null;
     activeOperationsRef.current = [];
-    previousPointRef.current = null;
+    drawingRef.current = false;
+    strokeApertureRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -467,29 +853,35 @@ export const ApertureEditor = memo(function ApertureEditor({
       cancelAnimationFrame(drawingFrameRef.current);
       drawingFrameRef.current = null;
     }
+    if (tool === "select") {
+      updateSelection(selectionOriginRef.current);
+    }
     const base = drawingBaseRef.current;
-    if (base) {
+    if (base && tool !== "select") {
       apertureRef.current = base;
       renderAmplitude(base.amplitude);
       onChange(base);
       historyRef.current.pop();
       setUndoCount(historyRef.current.length);
     }
+    if (tool === "move") updateSelection(selectionOriginRef.current);
     pendingPointRef.current = null;
     previousPointRef.current = null;
     drawingBaseRef.current = null;
     activeOperationsRef.current = [];
     drawingRef.current = false;
     strokeApertureRef.current = null;
-    invalidateLastUnit();
+    if (tool !== "select") invalidateLastUnit();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   }
 
   function clearAperture() {
+    cancelPolygon(false);
     saveHistory();
     invalidateLastUnit();
+    clearSelection();
     const next = { amplitude: new Float32Array(size * size), phase: new Float32Array(size * size) };
     strokeApertureRef.current = null;
     apertureRef.current = next;
@@ -498,9 +890,11 @@ export const ApertureEditor = memo(function ApertureEditor({
   }
 
   function undo() {
+    if (cancelPolygon()) return;
     const previous = historyRef.current.pop();
     if (previous) {
       invalidateLastUnit();
+      clearSelection();
       strokeApertureRef.current = null;
       apertureRef.current = previous;
       renderAmplitude(previous.amplitude);
@@ -541,8 +935,10 @@ export const ApertureEditor = memo(function ApertureEditor({
     if (!item) return;
     try {
       const next = decodeAperture(item.data, size);
+      cancelPolygon(false);
       saveHistory();
       invalidateLastUnit();
+      clearSelection();
       strokeApertureRef.current = null;
       apertureRef.current = next;
       renderAmplitude(next.amplitude);
@@ -578,10 +974,10 @@ export const ApertureEditor = memo(function ApertureEditor({
           </div>
         </div>
         <div className="editor-mode" role="tablist" aria-label="衍射屏编辑方式">
-          <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "active" : ""} onClick={() => setMode("draw")}>
+          <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "active" : ""} onClick={() => changeEditorMode("draw")}>
             <PencilSimple size={16} weight="duotone" /> 绘制
           </button>
-          <button type="button" role="tab" aria-selected={mode === "function"} className={mode === "function" ? "active" : ""} onClick={() => setMode("function")}>
+          <button type="button" role="tab" aria-selected={mode === "function"} className={mode === "function" ? "active" : ""} onClick={() => changeEditorMode("function")}>
             <FunctionIcon size={16} weight="bold" /> 屏函数
           </button>
         </div>
@@ -591,22 +987,56 @@ export const ApertureEditor = memo(function ApertureEditor({
         {mode === "draw" && (
           <div className="drawing-toolbar" aria-label="绘制工具">
             {TOOLS.map(({ id, label, Icon }) => (
-              <button key={id} type="button" className={tool === id ? "active" : ""} onClick={() => setTool(id)} aria-label={label} title={label}>
+              <button
+                key={id}
+                type="button"
+                className={`${tool === id ? "active" : ""} ${id === "select" ? "selection-tool" : ""}`}
+                onClick={() => chooseTool(id)}
+                aria-label={label}
+                title={label}
+              >
                 <Icon size={19} weight={tool === id ? "fill" : "regular"} />
               </button>
             ))}
+            <details className="repeat-menu toolbar-repeat-menu">
+              <summary title="周期性重复最近绘制单元" aria-label="周期性重复最近绘制单元">
+                <Repeat size={17} /><span>重复单元</span>
+              </summary>
+              <div className="repeat-panel">
+                <header><strong>周期重复</strong><span>最近绘制单元</span></header>
+                <div className="repeat-direction" role="group" aria-label="重复方向">
+                  <button type="button" className={repeatDirection === "horizontal" ? "active" : ""} onClick={() => setRepeatDirection("horizontal")}>横向 →</button>
+                  <button type="button" className={repeatDirection === "vertical" ? "active" : ""} onClick={() => setRepeatDirection("vertical")}>纵向 ↓</button>
+                </div>
+                <label>
+                  <span>副本数量</span><output>{repeatCount}</output>
+                  <input type="range" min="1" max="12" value={repeatCount} onChange={(event) => setRepeatCount(Number(event.target.value))} />
+                </label>
+                <label>
+                  <span>单元间距</span><output>{repeatSpacing}px</output>
+                  <input type="range" min="0" max="96" value={repeatSpacing} onChange={(event) => setRepeatSpacing(Number(event.target.value))} />
+                </label>
+                <button type="button" className="repeat-apply" onClick={repeatLastUnit} disabled={!hasRepeatableUnit}>
+                  <Repeat size={15} /> 生成副本
+                </button>
+                <p aria-live="polite">{repeatMessage}</p>
+              </div>
+            </details>
           </div>
         )}
         <div className="aperture-canvas-shell">
           <canvas
             ref={canvasRef}
-            className="aperture-canvas"
+            className={`aperture-canvas tool-${tool}`}
             width={size}
             height={size}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
+            onDoubleClick={() => {
+              if (tool === "polygon" && polygonVerticesRef.current.length >= 3) finishPolygon();
+            }}
             aria-label="衍射屏透光率绘制区域，黑色不透光，白色完全透光"
           />
           <svg className="aperture-grid" viewBox="0 0 100 100" aria-hidden="true">
@@ -619,6 +1049,27 @@ export const ApertureEditor = memo(function ApertureEditor({
               ))}
             </g>
           </svg>
+          {selection && (
+            <div
+              className="selection-marquee"
+              style={{
+                left: `${(selection.left / size) * 100}%`,
+                top: `${(selection.top / size) * 100}%`,
+                width: `${((selection.right - selection.left) / size) * 100}%`,
+                height: `${((selection.bottom - selection.top) / size) * 100}%`,
+              }}
+              aria-hidden="true"
+            >
+              <span>{Math.round(selection.right - selection.left)} × {Math.round(selection.bottom - selection.top)}</span>
+            </div>
+          )}
+          {tool === "polygon" && polygonVertices.length > 0 && (
+            <svg className="polygon-guides" viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+              {polygonVertices.map((point, index) => (
+                <circle key={`${point.x}-${point.y}-${index}`} cx={point.x} cy={point.y} r="2.4" />
+              ))}
+            </svg>
+          )}
           <span className="axis-label axis-x">x</span>
           <span className="axis-label axis-y">y</span>
           <div className="canvas-scale">−1.0 <span>0</span> +1.0</div>
@@ -626,7 +1077,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       </div>
 
       {mode === "draw" ? (
-        <div className={`draw-controls ${tool === "rectangle" ? "rectangle-controls" : ""}`}>
+        <div className={`draw-controls ${tool === "rectangle" ? "rectangle-controls" : ""} ${tool === "polygon" ? "polygon-controls" : ""} ${["select", "move"].includes(tool) ? "selection-controls" : ""}`}>
           {tool === "rectangle" ? (
             <>
               <label className={!rectangleEditable ? "disabled" : ""}>
@@ -660,47 +1111,47 @@ export const ApertureEditor = memo(function ApertureEditor({
                 <output>{rectangleHeight}px</output>
               </label>
             </>
-          ) : (
+          ) : !["select", "move"].includes(tool) ? (
             <label>
-              <span>工具尺寸</span>
-              <input type="range" min="8" max="120" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
+              <span>{tool === "line" ? "直线粗细" : tool === "polygon" ? "边线粗细" : "工具尺寸"}</span>
+              <input type="range" min={tool === "line" || tool === "polygon" ? "2" : "8"} max="120" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
               <output>{brushSize}px</output>
             </label>
-          )}
-          <label>
-            <span>透光率 |T|</span>
-            <input type="range" min="0" max="1" step="0.05" value={transmission} onChange={(event) => setTransmission(Number(event.target.value))} />
-            <output>{transmission.toFixed(2)}</output>
-          </label>
-          <div className="canvas-actions">
-            <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销（剩余 ${undoCount}/3 步）`}>
-              <ArrowCounterClockwise size={18} /><small>{undoCount}</small>
-            </button>
-            <button type="button" onClick={clearAperture} title="清空"><Trash size={18} /></button>
-            <details className="repeat-menu">
-              <summary title="周期性重复最近绘制单元" aria-label="周期性重复最近绘制单元"><Repeat size={18} /></summary>
-              <div className="repeat-panel">
-                <header><strong>周期重复</strong><span>最近绘制单元</span></header>
-                <div className="repeat-direction" role="group" aria-label="重复方向">
-                  <button type="button" className={repeatDirection === "horizontal" ? "active" : ""} onClick={() => setRepeatDirection("horizontal")}>横向 →</button>
-                  <button type="button" className={repeatDirection === "vertical" ? "active" : ""} onClick={() => setRepeatDirection("vertical")}>纵向 ↓</button>
-                </div>
-                <label>
-                  <span>副本数量</span><output>{repeatCount}</output>
-                  <input type="range" min="1" max="12" value={repeatCount} onChange={(event) => setRepeatCount(Number(event.target.value))} />
-                </label>
-                <label>
-                  <span>单元间距</span><output>{repeatSpacing}px</output>
-                  <input type="range" min="0" max="96" value={repeatSpacing} onChange={(event) => setRepeatSpacing(Number(event.target.value))} />
-                </label>
-                <button type="button" className="repeat-apply" onClick={repeatLastUnit} disabled={!hasRepeatableUnit}>
-                  <Repeat size={15} /> 生成副本
-                </button>
-                <p aria-live="polite">{repeatMessage}</p>
+          ) : null}
+          {tool === "polygon" && (
+            <div className="polygon-style-control">
+              <span>多边形样式</span>
+              <div role="group" aria-label="多边形样式">
+                <button type="button" className={polygonFilled ? "active" : ""} onClick={() => setPolygonFilled(true)}>实心</button>
+                <button type="button" className={!polygonFilled ? "active" : ""} onClick={() => setPolygonFilled(false)}>空心</button>
               </div>
-            </details>
+            </div>
+          )}
+          {!["select", "move", "eraser"].includes(tool) && (
+            <label>
+              <span>透光率 |T|</span>
+              <input type="range" min="0" max="1" step="0.05" value={transmission} onChange={(event) => setTransmission(Number(event.target.value))} />
+              <output>{transmission.toFixed(2)}</output>
+            </label>
+          )}
+          {tool === "polygon" && (
+            <div className="polygon-finish-actions">
+              <button type="button" onClick={finishPolygon} disabled={polygonVertices.length < 3}><Check size={14} /> 完成多边形</button>
+              <button type="button" onClick={() => cancelPolygon()} disabled={polygonVertices.length === 0}><X size={14} /> 取消</button>
+            </div>
+          )}
+          {["select", "move"].includes(tool) && selection && (
+            <button type="button" className="clear-selection-action" onClick={clearSelection}><X size={14} /> 取消选区</button>
+          )}
+          <p className="tool-status" aria-live="polite">{toolMessage}</p>
+          <div className="canvas-actions utility-actions">
+            <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销（剩余 ${undoCount}/3 步）`}>
+              <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
+            </button>
+            <button type="button" onClick={clearAperture} title="清空衍射屏全部内容"><Trash size={17} /><span>清空画布</span></button>
+            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共衍射屏"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
             <details className="local-save-menu">
-              <summary title="本地衍射屏存档" aria-label="本地衍射屏存档"><FloppyDisk size={18} /></summary>
+              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
               <div className="local-save-panel">
                 <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
                 <select value={selectedSaveId} onChange={(event) => setSelectedSaveId(event.target.value)} aria-label="选择本地衍射屏存档">

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  moveApertureSelection,
+  paintPolygonInto,
   paintRectangleInto,
   paintSegmentInto,
   paintStamp,
@@ -131,4 +133,57 @@ test("a drawing unit repeats with an edge-to-edge gap in either direction", () =
     direction: "vertical",
   });
   assert.ok(Math.abs(vertical[15 * size + 6] - 0.7) < 1e-6);
+});
+
+test("filled and outlined polygons rasterize different interiors", () => {
+  const size = 32;
+  const vertices = [{ x: 6, y: 6 }, { x: 26, y: 8 }, { x: 16, y: 26 }];
+  const filled = new Float32Array(size * size);
+  paintPolygonInto({
+    amplitude: filled,
+    phase: new Float32Array(filled.length),
+    size,
+    vertices,
+    filled: true,
+    lineWidth: 2,
+    transmission: 1,
+  });
+  assert.equal(filled[14 * size + 16], 1);
+
+  const outlined = new Float32Array(size * size);
+  paintPolygonInto({
+    amplitude: outlined,
+    phase: new Float32Array(outlined.length),
+    size,
+    vertices,
+    filled: false,
+    lineWidth: 2,
+    transmission: 1,
+  });
+  assert.equal(outlined[14 * size + 16], 0);
+  assert.ok(outlined[7 * size + 12] > 0);
+});
+
+test("moving a rectangular selection cuts and pastes amplitude and phase", () => {
+  const size = 12;
+  const amplitude = new Float32Array(size * size);
+  const phase = new Float32Array(size * size);
+  amplitude[3 * size + 4] = 0.75;
+  phase[3 * size + 4] = 1.2;
+  amplitude[3 * size + 8] = 0.4;
+
+  const moved = moveApertureSelection({
+    amplitude,
+    phase,
+    size,
+    bounds: { left: 3, top: 2, right: 6, bottom: 5 },
+    offsetX: 3,
+    offsetY: 2,
+  });
+
+  assert.equal(moved.amplitude[3 * size + 4], 0);
+  assert.equal(moved.phase[3 * size + 4], 0);
+  assert.equal(moved.amplitude[5 * size + 7], 0.75);
+  assert.ok(Math.abs(moved.phase[5 * size + 7] - 1.2) < 1e-6);
+  assert.ok(Math.abs(moved.amplitude[3 * size + 8] - 0.4) < 1e-6);
 });
