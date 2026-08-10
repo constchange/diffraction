@@ -756,6 +756,30 @@ input[type="range"] {
   grid-column: 1 / -1;
 }
 
+.repeat-panel-title {
+  display: grid;
+  gap: 2px;
+}
+
+.repeat-panel .repeat-panel-close {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #294a76;
+  border-radius: 6px;
+  color: #8fa8cb;
+  background: #0b1c36;
+  cursor: pointer;
+}
+
+.repeat-panel .repeat-panel-close:hover {
+  color: #fff;
+  border-color: #4778ba;
+  background: #153462;
+}
+
 .repeat-panel header,
 .local-save-panel header,
 .local-save-panel > div {
