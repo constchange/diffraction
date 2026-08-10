@@ -3,6 +3,7 @@ const AMPLITUDE_BYTES = APERTURE_SIZE * APERTURE_SIZE;
 const PHASE_BYTES = AMPLITUDE_BYTES * 2;
 const MAX_BODY_BYTES = 420_000;
 const PREVIEW_SIZE = 48;
+const FORMULA_FORMAT = "fraunhofer-formula-v1";
 
 const BUILTIN_BLOCKED_TERMS = [
   ["色情", "pornography"],
@@ -240,7 +241,7 @@ function makePreview(amplitude) {
   return bytesToBase64(preview);
 }
 
-export async function validateApertureData(value) {
+async function validateRasterAperture(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ApiError(400, "INVALID_APERTURE", "衍射屏数据缺失");
   }
@@ -264,6 +265,26 @@ export async function validateApertureData(value) {
   };
 }
 
+export async function validateApertureData(value, previewValue) {
+  if (value?.format !== FORMULA_FORMAT) return validateRasterAperture(value);
+  const formula = typeof value.formula === "string" ? value.formula.trim() : "";
+  if (value.size !== APERTURE_SIZE || !formula || formula.length > 1200
+    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(formula)) {
+    throw new ApiError(400, "INVALID_APERTURE", "屏函数格式或采样尺寸不兼容");
+  }
+  const previewSource = await validateRasterAperture(previewValue);
+  return {
+    aperture: {
+      format: FORMULA_FORMAT,
+      size: APERTURE_SIZE,
+      formula,
+    },
+    preview: previewSource.preview,
+    patternHash: previewSource.patternHash,
+    formula,
+  };
+}
+
 export async function parseUploadRequest(request) {
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > MAX_BODY_BYTES) {
@@ -284,6 +305,7 @@ export async function parseUploadRequest(request) {
     nickname: cleanLabel(body.nickname, "昵称", 20),
     patternName: cleanLabel(body.patternName, "衍射屏名称", 32),
     apertureData: body.aperture,
+    previewApertureData: body.previewAperture,
   };
 }
 
@@ -304,12 +326,13 @@ export async function getModerationTerms(env) {
   return [...unique.values()];
 }
 
-export function moderateTextFields({ nickname, patternName }, terms) {
-  for (const [field, value] of [["nickname", nickname], ["patternName", patternName]]) {
+export function moderateTextFields({ nickname, patternName, formula }, terms) {
+  for (const [field, value] of [["nickname", nickname], ["patternName", patternName], ["formula", formula]]) {
+    if (typeof value !== "string") continue;
     const normalized = normalizeModerationText(value);
     const match = terms.find((item) => normalized.includes(item.term));
     if (match) {
-      const label = field === "nickname" ? "昵称" : "衍射屏名称";
+      const label = field === "nickname" ? "昵称" : field === "patternName" ? "衍射屏名称" : "屏函数";
       throw new ApiError(422, "CONTENT_REJECTED", `${label}触发${CATEGORY_LABELS[match.category] ?? "敏感内容"}规则，上传数据已丢弃`, {
         field,
         category: match.category,

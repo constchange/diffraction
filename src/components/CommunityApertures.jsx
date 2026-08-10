@@ -6,7 +6,11 @@ import { FolderOpen } from "@phosphor-icons/react/FolderOpen";
 import { GlobeHemisphereWest } from "@phosphor-icons/react/GlobeHemisphereWest";
 import { Trash } from "@phosphor-icons/react/Trash";
 import { X } from "@phosphor-icons/react/X";
-import { decodeAperture, encodeAperture } from "../core/apertureStorage.js";
+import {
+  decodeScreenDefinition,
+  encodeAperture,
+  encodeScreenDefinition,
+} from "../core/apertureStorage.js";
 import {
   deleteCommunityAperture,
   getCommunityAperture,
@@ -69,6 +73,8 @@ function EmptyState({ children }) {
 export function CommunityApertures({
   open,
   aperture,
+  mode,
+  formula,
   size,
   apiBase,
   onLoad,
@@ -160,7 +166,8 @@ export function CommunityApertures({
         slot: selectedSlot,
         nickname,
         patternName,
-        aperture: encodeAperture(aperture, size),
+        aperture: encodeScreenDefinition({ mode, aperture, formula }, size),
+        ...(mode === "function" ? { previewAperture: encodeAperture(aperture, size) } : {}),
       });
       setNotice({
         type: "success",
@@ -193,8 +200,8 @@ export function CommunityApertures({
     setAction(`load-${item.id}`);
     try {
       const result = await getCommunityAperture(apiBase, item.id);
-      const next = decodeAperture(result.item.aperture, size);
-      onLoad(next, result.item);
+      const savedScreen = decodeScreenDefinition(result.item.aperture, size);
+      onLoad(savedScreen, result.item);
       onClose();
     } catch (error) {
       setNotice({ type: "error", message: error.message });

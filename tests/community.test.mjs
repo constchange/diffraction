@@ -8,7 +8,7 @@ import {
   parseUploadRequest,
   validateApertureData,
 } from "../edge-functions/_shared/community.js";
-import { encodeAperture } from "../src/core/apertureStorage.js";
+import { encodeAperture, encodeScreenDefinition } from "../src/core/apertureStorage.js";
 import { onRequestPost } from "../edge-functions/api/community-apertures/index.js";
 
 function sampleEncodedAperture(size = 256) {
@@ -35,6 +35,27 @@ test("community upload validation rejects malformed complex aperture buffers", a
   encoded.phase = encoded.phase.slice(4);
   await assert.rejects(
     validateApertureData(encoded),
+    (error) => error instanceof ApiError && error.code === "INVALID_APERTURE",
+  );
+});
+
+test("community validation stores function text and derives its preview from the rendered raster", async () => {
+  const formula = String.raw`\operatorname{circ}\left(\frac{\sqrt{x^2+y^2}}{0.3}\right)`;
+  const encodedFormula = encodeScreenDefinition({ mode: "function", formula }, 256);
+  const validated = await validateApertureData(encodedFormula, sampleEncodedAperture());
+  assert.deepEqual(validated.aperture, {
+    format: "fraunhofer-formula-v1",
+    size: 256,
+    formula,
+  });
+  assert.equal(atob(validated.preview).length, 48 * 48);
+  assert.match(validated.patternHash, /^[0-9a-f]{64}$/);
+});
+
+test("community function validation requires a rendered preview raster", async () => {
+  const encodedFormula = encodeScreenDefinition({ mode: "function", formula: "x+y" }, 256);
+  await assert.rejects(
+    validateApertureData(encodedFormula),
     (error) => error instanceof ApiError && error.code === "INVALID_APERTURE",
   );
 });

@@ -36,10 +36,11 @@ import {
   scaleApertureSelection,
 } from "../core/drawing.js";
 import {
-  decodeAperture,
-  encodeAperture,
+  decodeScreenDefinition,
+  encodeScreenDefinition,
   MAX_LOCAL_APERTURES,
   readLocalApertures,
+  screenDefinitionMode,
   writeLocalApertures,
 } from "../core/apertureStorage.js";
 
@@ -49,6 +50,7 @@ const THROTTLED_PREVIEW_TOOLS = new Set(["line", "rectangle", "ellipse", "polygo
 const PREVIEW_INTERVAL_MS = 90;
 const GRID_LINES = Array.from({ length: 16 }, (_, index) => ((index + 1) * 100) / 17);
 const RESIZE_HANDLES = ["nw", "ne", "se", "sw"];
+const DOUBLE_SLIT_FORMULA = FORMULA_PRESETS.find((preset) => preset.id === "double-slit").latex;
 
 const TOOLS = [
   { id: "brush", label: "自由画笔", Icon: PencilSimple },
@@ -71,7 +73,10 @@ export const ApertureEditor = memo(function ApertureEditor({
   size,
   onChange,
   onPreview,
+  mode,
+  formula,
   onModeChange,
+  onFormulaChange,
   onFunctionEditStart,
   onOpenCommunity,
   isRenderingPaused = false,
@@ -100,7 +105,9 @@ export const ApertureEditor = memo(function ApertureEditor({
   const historyRef = useRef([]);
   const formulaWorkerRef = useRef(null);
   const formulaRequestRef = useRef(0);
-  const [mode, setMode] = useState("draw");
+  const modeRef = useRef(mode);
+  const previousAperturePropRef = useRef(aperture);
+  const drawContentProtectedRef = useRef(false);
   const [tool, setTool] = useState("brush");
   const [brushSize, setBrushSize] = useState(34);
   const [rectangleWidth, setRectangleWidth] = useState(48);
@@ -116,7 +123,6 @@ export const ApertureEditor = memo(function ApertureEditor({
   const [repeatDirection, setRepeatDirection] = useState("horizontal");
   const [repeatMessage, setRepeatMessage] = useState("请先用矩形选框选择一个单元");
   const [repeatPanelOpen, setRepeatPanelOpen] = useState(false);
-  const [formula, setFormula] = useState(FORMULA_PRESETS[1].latex);
   const [formulaState, setFormulaState] = useState({ state: "ready", message: "可实时解析复振幅" });
   const [undoCount, setUndoCount] = useState(0);
   const [savedApertures, setSavedApertures] = useState(() => {
@@ -130,9 +136,19 @@ export const ApertureEditor = memo(function ApertureEditor({
   const [selectedSaveId, setSelectedSaveId] = useState("");
   const [storageMessage, setStorageMessage] = useState("可保存当前屏函数");
 
+  modeRef.current = mode;
+
   useEffect(() => {
     if (!drawingRef.current) apertureRef.current = aperture;
+    if (mode === "draw" && previousAperturePropRef.current !== aperture) {
+      drawContentProtectedRef.current = true;
+    }
+    previousAperturePropRef.current = aperture;
   }, [aperture]);
+
+  useEffect(() => {
+    if (mode === "function") drawContentProtectedRef.current = false;
+  }, [mode]);
 
   useEffect(
     () => () => {
@@ -142,10 +158,6 @@ export const ApertureEditor = memo(function ApertureEditor({
   );
 
   useEffect(() => {
-    onModeChange?.(mode);
-  }, [mode, onModeChange]);
-
-  useEffect(() => {
     const worker = new Worker(new URL("../workers/formula.worker.js", import.meta.url), {
       type: "module",
     });
@@ -153,6 +165,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     worker.onmessage = (event) => {
       const payload = event.data;
       if (payload.requestId !== formulaRequestRef.current) return;
+      if (modeRef.current !== "function") return;
       if (payload.type === "formula-result") {
         saveHistory();
         resetEditableShape();
@@ -595,11 +608,25 @@ export const ApertureEditor = memo(function ApertureEditor({
   }
 
   function changeEditorMode(nextMode) {
-    if (nextMode !== "draw") {
+    if (nextMode === mode) return;
+    if (mode === "function" && nextMode === "draw") {
+      const accepted = window.confirm("如果切换到绘制模式，将无法再回到函数编辑模式");
+      if (!accepted) return;
+      drawContentProtectedRef.current = true;
+      onModeChange("draw");
+      return;
+    }
+    if (mode === "draw" && nextMode === "function") {
+      if (drawContentProtectedRef.current) {
+        const accepted = window.confirm("如果切换到屏函数模式，现在的衍射屏信息将会丢失，自动重置为双缝干涉");
+        if (!accepted) return;
+      }
       cancelPolygon();
       clearSelection();
+      resetEditableShape();
+      onFormulaChange(DOUBLE_SLIT_FORMULA);
+      onModeChange("function");
     }
-    setMode(nextMode);
   }
 
   function previewSelectionMove(to) {
@@ -1079,9 +1106,13 @@ export const ApertureEditor = memo(function ApertureEditor({
       const item = {
         id: `${savedAt.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
         slot,
-        name: `衍射屏 ${slot}`,
+        name: `${mode === "function" ? "屏函数" : "衍射屏"} ${slot}`,
         savedAt,
-        data: encodeAperture(apertureRef.current, size),
+        data: encodeScreenDefinition({
+          mode,
+          aperture: apertureRef.current,
+          formula,
+        }, size),
       };
       const next = [...savedApertures, item];
       writeLocalApertures(window.localStorage, next);
@@ -1097,15 +1128,21 @@ export const ApertureEditor = memo(function ApertureEditor({
     const item = savedApertures.find((candidate) => candidate.id === selectedSaveId);
     if (!item) return;
     try {
-      const next = decodeAperture(item.data, size);
+      const savedScreen = decodeScreenDefinition(item.data, size);
       cancelPolygon(false);
-      saveHistory();
       resetEditableShape();
       clearSelection();
       strokeApertureRef.current = null;
-      apertureRef.current = next;
-      renderAmplitude(next.amplitude);
-      onChange(next);
+      if (savedScreen.mode === "function") {
+        onFormulaChange(savedScreen.formula);
+        onModeChange("function");
+      } else {
+        saveHistory();
+        apertureRef.current = savedScreen.aperture;
+        renderAmplitude(savedScreen.aperture.amplitude);
+        onModeChange("draw");
+        onChange(savedScreen.aperture);
+      }
       setStorageMessage(`已载入“${item.name}”`);
     } catch {
       setStorageMessage("载入失败：存档数据已损坏");
@@ -1138,10 +1175,10 @@ export const ApertureEditor = memo(function ApertureEditor({
         </div>
         <div className="editor-mode" role="tablist" aria-label="衍射屏编辑方式">
           <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "active" : ""} onClick={() => changeEditorMode("draw")}>
-            <PencilSimple size={16} weight="duotone" /> 绘制
+            <PencilSimple size={16} weight="duotone" /> 绘制模式
           </button>
           <button type="button" role="tab" aria-selected={mode === "function"} className={mode === "function" ? "active" : ""} onClick={() => changeEditorMode("function")}>
-            <FunctionIcon size={16} weight="bold" /> 屏函数
+            <FunctionIcon size={16} weight="bold" /> 屏函数模式
           </button>
         </div>
       </header>
@@ -1342,7 +1379,7 @@ export const ApertureEditor = memo(function ApertureEditor({
                   <option value="">选择一个存档</option>
                   {savedApertures.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} · {new Date(item.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                      [{screenDefinitionMode(item.data) === "function" ? "函数" : "绘制"}] {item.name} · {new Date(item.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                     </option>
                   ))}
                 </select>
@@ -1370,12 +1407,41 @@ export const ApertureEditor = memo(function ApertureEditor({
           </div>
           <div className="preset-row" aria-label="屏函数预设">
             {FORMULA_PRESETS.map((preset) => (
-              <button key={preset.id} type="button" onClick={() => setFormula(preset.latex)}>{preset.name}</button>
+              <button key={preset.id} type="button" onClick={() => onFormulaChange(preset.latex)}>{preset.name}</button>
             ))}
           </div>
-          <textarea value={formula} onChange={(event) => setFormula(event.target.value)} spellCheck="false" aria-label="LaTeX 复数屏函数" />
+          <textarea value={formula} onChange={(event) => onFormulaChange(event.target.value)} spellCheck="false" aria-label="LaTeX 复数屏函数" />
           <div className="formula-preview" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
           <p className={`formula-status ${formulaState.state}`}>{formulaState.message}</p>
+          <div className="canvas-actions utility-actions formula-utility-actions">
+            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共屏函数"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
+            <details className="local-save-menu">
+              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
+              <div className="local-save-panel">
+                <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
+                <select value={selectedSaveId} onChange={(event) => setSelectedSaveId(event.target.value)} aria-label="选择本地衍射屏存档">
+                  <option value="">选择一个存档</option>
+                  {savedApertures.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      [{screenDefinitionMode(item.data) === "function" ? "函数" : "绘制"}] {item.name} · {new Date(item.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                    </option>
+                  ))}
+                </select>
+                <div>
+                  <button type="button" onClick={saveApertureLocally} disabled={savedApertures.length >= MAX_LOCAL_APERTURES}>
+                    <FloppyDisk size={15} /> 保存当前
+                  </button>
+                  <button type="button" onClick={loadSelectedAperture} disabled={!selectedSaveId}>
+                    <FolderOpen size={15} /> 载入
+                  </button>
+                  <button type="button" onClick={deleteSelectedAperture} disabled={!selectedSaveId}>
+                    <Trash size={15} /> 删除
+                  </button>
+                </div>
+                <p aria-live="polite">{storageMessage}</p>
+              </div>
+            </details>
+          </div>
         </div>
       )}
     </section>
