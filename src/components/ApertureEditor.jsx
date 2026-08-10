@@ -15,6 +15,7 @@ import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { Polygon } from "@phosphor-icons/react/Polygon";
 import { Rectangle } from "@phosphor-icons/react/Rectangle";
 import { Repeat } from "@phosphor-icons/react/Repeat";
+import { Resize } from "@phosphor-icons/react/Resize";
 import { Selection } from "@phosphor-icons/react/Selection";
 import { Square } from "@phosphor-icons/react/Square";
 import { Trash } from "@phosphor-icons/react/Trash";
@@ -23,11 +24,16 @@ import { X } from "@phosphor-icons/react/X";
 import katex from "katex";
 import { FORMULA_PRESETS } from "../core/presets.js";
 import {
+  constrainEllipseToCircle,
+  constrainPointToAxis,
   moveApertureSelection,
   paintDrawingOperationInto,
+  paintEllipseInto,
   paintPolygonInto,
   paintRectangleInto,
   repeatApertureSelectionInto,
+  resizedSelectionBounds,
+  scaleApertureSelection,
 } from "../core/drawing.js";
 import {
   decodeAperture,
@@ -39,14 +45,16 @@ import {
 
 const UNDO_LIMIT = 3;
 const CONTINUOUS_TOOLS = new Set(["brush", "eraser"]);
-const THROTTLED_PREVIEW_TOOLS = new Set(["line", "rectangle", "polygon", "move"]);
+const THROTTLED_PREVIEW_TOOLS = new Set(["line", "rectangle", "ellipse", "polygon", "move", "resize"]);
 const PREVIEW_INTERVAL_MS = 90;
 const GRID_LINES = Array.from({ length: 16 }, (_, index) => ((index + 1) * 100) / 17);
+const RESIZE_HANDLES = ["nw", "ne", "se", "sw"];
 
 const TOOLS = [
   { id: "brush", label: "自由画笔", Icon: PencilSimple },
   { id: "line", label: "直线", Icon: LineSegment },
   { id: "circle", label: "圆", Icon: Circle },
+  { id: "ellipse", label: "椭圆", Icon: Circle },
   { id: "square", label: "正方形", Icon: Square },
   { id: "rectangle", label: "长方形", Icon: Rectangle },
   { id: "polygon", label: "多边形", Icon: Polygon },
@@ -54,6 +62,7 @@ const TOOLS = [
   { id: "triangle", label: "三角形", Icon: Triangle },
   { id: "select", label: "矩形选框", Icon: Selection },
   { id: "move", label: "移动选区", Icon: ArrowsOutCardinal },
+  { id: "resize", label: "缩放选区", Icon: Resize },
   { id: "eraser", label: "橡皮", Icon: Eraser },
 ];
 
@@ -77,10 +86,11 @@ export const ApertureEditor = memo(function ApertureEditor({
   const pendingPointRef = useRef(null);
   const drawingBaseRef = useRef(null);
   const activeOperationsRef = useRef([]);
-  const editableRectangleRef = useRef(null);
+  const editableShapeRef = useRef(null);
   const selectionRef = useRef(null);
   const selectionOriginRef = useRef(null);
   const moveOffsetRef = useRef({ x: 0, y: 0 });
+  const resizeHandleRef = useRef(null);
   const polygonVerticesRef = useRef([]);
   const polygonCursorRef = useRef(null);
   const drawingFrameRef = useRef(null);
@@ -105,6 +115,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   const [repeatSpacing, setRepeatSpacing] = useState(12);
   const [repeatDirection, setRepeatDirection] = useState("horizontal");
   const [repeatMessage, setRepeatMessage] = useState("请先用矩形选框选择一个单元");
+  const [repeatPanelOpen, setRepeatPanelOpen] = useState(false);
   const [formula, setFormula] = useState(FORMULA_PRESETS[1].latex);
   const [formulaState, setFormulaState] = useState({ state: "ready", message: "可实时解析复振幅" });
   const [undoCount, setUndoCount] = useState(0);
@@ -144,7 +155,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       if (payload.requestId !== formulaRequestRef.current) return;
       if (payload.type === "formula-result") {
         saveHistory();
-        resetEditableRectangle();
+        resetEditableShape();
         clearSelection();
         const next = { amplitude: payload.amplitude, phase: payload.phase };
         apertureRef.current = next;
@@ -191,6 +202,22 @@ export const ApertureEditor = memo(function ApertureEditor({
     if (tool !== "polygon" || polygonVertices.length === 0) return;
     previewPolygon(polygonCursorRef.current);
   }, [polygonFilled, brushSize, transmission]);
+
+  useEffect(() => {
+    if (mode !== "draw") return undefined;
+    function handleUndoShortcut(event) {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== "z") return;
+      const target = event.target;
+      if (target instanceof HTMLElement
+        && (target.isContentEditable || new Set(["INPUT", "TEXTAREA", "SELECT"]).has(target.tagName))) return;
+      if (drawingRef.current
+        || (historyRef.current.length === 0 && polygonVerticesRef.current.length === 0)) return;
+      event.preventDefault();
+      undo();
+    }
+    window.addEventListener("keydown", handleUndoShortcut);
+    return () => window.removeEventListener("keydown", handleUndoShortcut);
+  }, [mode, onChange]);
 
   function renderAmplitude(amplitude) {
     const canvas = canvasRef.current;
@@ -246,8 +273,8 @@ export const ApertureEditor = memo(function ApertureEditor({
     setUndoCount(historyRef.current.length);
   }
 
-  function resetEditableRectangle() {
-    editableRectangleRef.current = null;
+  function resetEditableShape() {
+    editableShapeRef.current = null;
     setRectangleEditable(false);
   }
 
@@ -268,6 +295,7 @@ export const ApertureEditor = memo(function ApertureEditor({
 
   function clearSelection() {
     selectionOriginRef.current = null;
+    resizeHandleRef.current = null;
     updateSelection(null);
   }
 
@@ -294,6 +322,21 @@ export const ApertureEditor = memo(function ApertureEditor({
       && point.x < activeSelection.right
       && point.y >= activeSelection.top
       && point.y < activeSelection.bottom);
+  }
+
+  function resizeHandleAtPoint(point, activeSelection = selectionRef.current) {
+    if (!activeSelection) return null;
+    const tolerance = Math.max(5, 9 * point.scale);
+    const positions = {
+      nw: { x: activeSelection.left, y: activeSelection.top },
+      ne: { x: activeSelection.right, y: activeSelection.top },
+      se: { x: activeSelection.right, y: activeSelection.bottom },
+      sw: { x: activeSelection.left, y: activeSelection.bottom },
+    };
+    return RESIZE_HANDLES.find((handle) => {
+      const target = positions[handle];
+      return Math.hypot(point.x - target.x, point.y - target.y) <= tolerance;
+    }) ?? null;
   }
 
   function previewWorkingAperture() {
@@ -374,6 +417,28 @@ export const ApertureEditor = memo(function ApertureEditor({
     previewWorkingAperture();
   }
 
+  function previewEllipse(to) {
+    const base = drawingBaseRef.current;
+    const from = previousPointRef.current;
+    if (!base || !from) return null;
+    const endpoint = to.shiftKey ? constrainEllipseToCircle(from, to, size) : to;
+    const working = cloneAperture(base);
+    paintEllipseInto({
+      amplitude: working.amplitude,
+      phase: working.phase,
+      size,
+      from,
+      to: endpoint,
+      transmission,
+    });
+    strokeApertureRef.current = working;
+    apertureRef.current = working;
+    mutationRevisionRef.current += 1;
+    renderAmplitude(working.amplitude);
+    previewWorkingAperture();
+    return endpoint;
+  }
+
   function lineOperation(from, to) {
     return {
       kind: "segment",
@@ -389,18 +454,20 @@ export const ApertureEditor = memo(function ApertureEditor({
     const base = drawingBaseRef.current;
     const from = previousPointRef.current;
     if (!base || !from) return;
+    const endpoint = to.shiftKey ? constrainPointToAxis(from, to) : to;
     const working = cloneAperture(base);
     paintDrawingOperationInto({
       amplitude: working.amplitude,
       phase: working.phase,
       size,
-      operation: lineOperation(from, to),
+      operation: lineOperation(from, endpoint),
     });
     strokeApertureRef.current = working;
     apertureRef.current = working;
     mutationRevisionRef.current += 1;
     renderAmplitude(working.amplitude);
     previewWorkingAperture();
+    return endpoint;
   }
 
   function polygonOperation(vertices = polygonVerticesRef.current) {
@@ -451,7 +518,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     }
     if (polygonVerticesRef.current.length === 0) {
       saveHistory();
-      resetEditableRectangle();
+      resetEditableShape();
       clearSelection();
       drawingBaseRef.current = apertureRef.current;
       mutationRevisionRef.current = 0;
@@ -513,12 +580,15 @@ export const ApertureEditor = memo(function ApertureEditor({
 
   function chooseTool(nextTool) {
     if (tool === "polygon" && nextTool !== "polygon") cancelPolygon();
-    if (!new Set(["select", "move"]).has(nextTool)) clearSelection();
+    if (nextTool !== tool) resetEditableShape();
+    if (!new Set(["select", "move", "resize"]).has(nextTool)) clearSelection();
     setTool(nextTool);
     const messages = {
       select: "在衍射屏上拖曳一个矩形选区",
       move: selectionRef.current ? "在选区内按住并拖曳以移动内容" : "请先用矩形选框建立选区",
-      line: "按住并拖曳，松开后得到一条直线",
+      resize: selectionRef.current ? "拖动选区四角缩放；按住 Shift 保持宽高比" : "请先用矩形选框建立选区",
+      line: "按住并拖曳；同时按住 Shift 可画水平或竖直线",
+      ellipse: "按住并拖曳画椭圆；同时按住 Shift 可画正圆",
       polygon: "逐点点击添加顶点；双击或按 Enter 完成",
     };
     setToolMessage(messages[nextTool] ?? "点击或拖曳，在衍射屏上绘制透光区域");
@@ -567,8 +637,30 @@ export const ApertureEditor = memo(function ApertureEditor({
     previewWorkingAperture();
   }
 
-  function updateEditableRectangle(dimension, value) {
-    const editable = editableRectangleRef.current;
+  function previewSelectionScale(to) {
+    const base = drawingBaseRef.current;
+    const original = selectionOriginRef.current;
+    const handle = resizeHandleRef.current;
+    if (!base || !original || !handle) return null;
+    const targetBounds = resizedSelectionBounds(original, handle, to, size, Boolean(to.shiftKey));
+    const working = scaleApertureSelection({
+      amplitude: base.amplitude,
+      phase: base.phase,
+      size,
+      bounds: original,
+      targetBounds,
+    });
+    strokeApertureRef.current = working;
+    apertureRef.current = working;
+    updateSelection(targetBounds);
+    mutationRevisionRef.current += 1;
+    renderAmplitude(working.amplitude);
+    previewWorkingAperture();
+    return targetBounds;
+  }
+
+  function updateEditableShape(dimension, value) {
+    const editable = editableShapeRef.current;
     if (!editable) return;
     const nextWidth = dimension === "width" ? value : rectangleWidth;
     const nextHeight = dimension === "height" ? value : rectangleHeight;
@@ -576,7 +668,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     else setRectangleHeight(value);
 
     const operation = {
-      kind: "rectangle",
+      kind: editable.kind ?? "rectangle",
       from: {
         x: editable.centre.x - nextWidth / 2,
         y: editable.centre.y - nextHeight / 2,
@@ -599,8 +691,8 @@ export const ApertureEditor = memo(function ApertureEditor({
     onPreview?.(next, { quality: "live" });
   }
 
-  function finalizeRectangleAdjustment() {
-    if (!editableRectangleRef.current) return;
+  function finalizeShapeAdjustment() {
+    if (!editableShapeRef.current) return;
     onChange(apertureRef.current, { quality: "final" });
   }
 
@@ -622,7 +714,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       direction: repeatDirection,
     });
     apertureRef.current = next;
-    editableRectangleRef.current = null;
+    editableShapeRef.current = null;
     setRectangleEditable(false);
     renderAmplitude(next.amplitude);
     onChange(next, { quality: "final" });
@@ -653,8 +745,12 @@ export const ApertureEditor = memo(function ApertureEditor({
       updateSelection(marqueeBounds(previousPointRef.current, next));
     } else if (tool === "move") {
       previewSelectionMove(next);
+    } else if (tool === "resize") {
+      previewSelectionScale(next);
     } else if (tool === "rectangle") {
       previewRectangle(next);
+    } else if (tool === "ellipse") {
+      previewEllipse(next);
     } else if (tool === "line") {
       previewLine(next);
     } else {
@@ -675,6 +771,11 @@ export const ApertureEditor = memo(function ApertureEditor({
       setToolMessage(selectionRef.current ? "请在选区内部按下并拖曳" : "请先用矩形选框建立选区");
       return;
     }
+    const resizeHandle = tool === "resize" ? resizeHandleAtPoint(rawPoint) : null;
+    if (tool === "resize" && !resizeHandle) {
+      setToolMessage(selectionRef.current ? "请拖动选区四角的控制点" : "请先用矩形选框建立选区");
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     drawingRef.current = true;
     previousPointRef.current = rawPoint;
@@ -691,7 +792,7 @@ export const ApertureEditor = memo(function ApertureEditor({
 
     saveHistory();
     const current = apertureRef.current;
-    resetEditableRectangle();
+    resetEditableShape();
     drawingBaseRef.current = current;
     activeOperationsRef.current = [];
     if (tool === "move") {
@@ -700,25 +801,31 @@ export const ApertureEditor = memo(function ApertureEditor({
       strokeApertureRef.current = current;
       return;
     }
+    if (tool === "resize") {
+      selectionOriginRef.current = selectionRef.current;
+      resizeHandleRef.current = resizeHandle;
+      strokeApertureRef.current = current;
+      return;
+    }
 
     clearSelection();
     const workingAperture = cloneAperture(current);
     strokeApertureRef.current = workingAperture;
     apertureRef.current = workingAperture;
-    const point = CONTINUOUS_TOOLS.has(tool) || ["rectangle", "line"].includes(tool)
+    const point = CONTINUOUS_TOOLS.has(tool) || ["rectangle", "ellipse", "line"].includes(tool)
       ? rawPoint
       : { ...rawPoint, x: Math.floor(rawPoint.x) + 0.5, y: Math.floor(rawPoint.y) + 0.5 };
     previousPointRef.current = point;
-    if (!["rectangle", "line"].includes(tool)) commitPoints([point]);
+    if (!["rectangle", "ellipse", "line"].includes(tool)) commitPoints([point]);
   }
 
   function handlePointerMove(event) {
     if (mode !== "draw") return;
     const polygonActive = tool === "polygon" && polygonVerticesRef.current.length > 0;
     const dragTool = CONTINUOUS_TOOLS.has(tool)
-      || ["rectangle", "line", "select", "move"].includes(tool);
+      || ["rectangle", "ellipse", "line", "select", "move", "resize"].includes(tool);
     if (!polygonActive && (!drawingRef.current || !dragTool)) return;
-    pendingPointRef.current = canvasPoint(event);
+    pendingPointRef.current = { ...canvasPoint(event), shiftKey: event.shiftKey };
     if (drawingFrameRef.current === null) {
       drawingFrameRef.current = requestAnimationFrame(flushPendingPoint);
     }
@@ -730,13 +837,13 @@ export const ApertureEditor = memo(function ApertureEditor({
       cancelAnimationFrame(drawingFrameRef.current);
       drawingFrameRef.current = null;
     }
-    const nextPoint = pendingPointRef.current ?? canvasPoint(event);
+    const nextPoint = { ...canvasPoint(event), shiftKey: event.shiftKey };
 
     if (tool === "select") {
       const nextSelection = marqueeBounds(previousPointRef.current, nextPoint, true);
       updateSelection(nextSelection);
       setToolMessage(nextSelection
-        ? `已选择 ${nextSelection.right - nextSelection.left} × ${nextSelection.bottom - nextSelection.top} px；切换到“移动选区”即可拖动`
+        ? `已选择 ${nextSelection.right - nextSelection.left} × ${nextSelection.bottom - nextSelection.top} px；可移动、缩放或重复`
         : "选区过小，请重新拖曳");
       finishPointerInteraction(event);
       return;
@@ -764,6 +871,36 @@ export const ApertureEditor = memo(function ApertureEditor({
       return;
     }
 
+    if (tool === "resize") {
+      const targetBounds = previewSelectionScale(nextPoint);
+      const original = selectionOriginRef.current;
+      const working = strokeApertureRef.current;
+      const changed = targetBounds && original && (
+        targetBounds.left !== original.left
+        || targetBounds.right !== original.right
+        || targetBounds.top !== original.top
+        || targetBounds.bottom !== original.bottom
+      );
+      if (working && changed) {
+        apertureRef.current = working;
+        onChange(working, { quality: "final" });
+        const width = targetBounds.right - targetBounds.left;
+        const height = targetBounds.bottom - targetBounds.top;
+        setToolMessage(`选区已缩放为 ${width} × ${height}px${nextPoint.shiftKey ? " · 已保持宽高比" : ""}`);
+      } else {
+        const base = drawingBaseRef.current;
+        apertureRef.current = base;
+        strokeApertureRef.current = null;
+        renderAmplitude(base.amplitude);
+        updateSelection(original);
+        historyRef.current.pop();
+        setUndoCount(historyRef.current.length);
+        setToolMessage("选区尺寸未改变");
+      }
+      finishPointerInteraction(event);
+      return;
+    }
+
     if (drawingRef.current && mode === "draw" && CONTINUOUS_TOOLS.has(tool)) {
       const previous = previousPointRef.current ?? nextPoint;
       if (Math.hypot(nextPoint.x - previous.x, nextPoint.y - previous.y) > 0.1) {
@@ -784,7 +921,8 @@ export const ApertureEditor = memo(function ApertureEditor({
         setRectangleWidth(roundedWidth);
         setRectangleHeight(roundedHeight);
         setRectangleEditable(true);
-        editableRectangleRef.current = {
+        editableShapeRef.current = {
+          kind: "rectangle",
           base: drawingBaseRef.current,
           centre: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 },
           transmission,
@@ -797,13 +935,46 @@ export const ApertureEditor = memo(function ApertureEditor({
         setUndoCount(historyRef.current.length);
       }
     }
+    if (drawingRef.current && mode === "draw" && tool === "ellipse") {
+      const from = previousPointRef.current;
+      const endpoint = nextPoint.shiftKey
+        ? constrainEllipseToCircle(from, nextPoint, size)
+        : nextPoint;
+      const width = Math.abs(endpoint.x - from.x);
+      const height = Math.abs(endpoint.y - from.y);
+      if (width >= 1 && height >= 1) {
+        previewEllipse(endpoint);
+        activeOperationsRef.current = [{ kind: "ellipse", from, to: endpoint, transmission }];
+        const roundedWidth = Math.max(1, Math.round(width));
+        const roundedHeight = Math.max(1, Math.round(height));
+        setRectangleWidth(roundedWidth);
+        setRectangleHeight(roundedHeight);
+        setRectangleEditable(true);
+        editableShapeRef.current = {
+          kind: "ellipse",
+          base: drawingBaseRef.current,
+          centre: { x: (from.x + endpoint.x) / 2, y: (from.y + endpoint.y) / 2 },
+          transmission,
+        };
+        setToolMessage(nextPoint.shiftKey
+          ? `正圆已完成 · ${roundedWidth}px`
+          : `椭圆已完成 · ${roundedWidth} × ${roundedHeight}px`);
+      } else {
+        apertureRef.current = drawingBaseRef.current;
+        strokeApertureRef.current = null;
+        renderAmplitude(drawingBaseRef.current.amplitude);
+        historyRef.current.pop();
+        setUndoCount(historyRef.current.length);
+      }
+    }
     if (drawingRef.current && mode === "draw" && tool === "line") {
       const from = previousPointRef.current;
-      const distance = Math.hypot(nextPoint.x - from.x, nextPoint.y - from.y);
+      const endpoint = nextPoint.shiftKey ? constrainPointToAxis(from, nextPoint) : nextPoint;
+      const distance = Math.hypot(endpoint.x - from.x, endpoint.y - from.y);
       if (distance >= 0.5) {
-        previewLine(nextPoint);
-        activeOperationsRef.current = [lineOperation(from, nextPoint)];
-        setToolMessage(`直线已完成 · 线宽 ${brushSize}px`);
+        previewLine(endpoint);
+        activeOperationsRef.current = [lineOperation(from, endpoint)];
+        setToolMessage(`直线已完成 · 线宽 ${brushSize}px${nextPoint.shiftKey ? " · 正交约束" : ""}`);
       } else {
         apertureRef.current = drawingBaseRef.current;
         strokeApertureRef.current = null;
@@ -831,6 +1002,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     previousPointRef.current = null;
     drawingBaseRef.current = null;
     activeOperationsRef.current = [];
+    resizeHandleRef.current = null;
     drawingRef.current = false;
     strokeApertureRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -854,14 +1026,15 @@ export const ApertureEditor = memo(function ApertureEditor({
       historyRef.current.pop();
       setUndoCount(historyRef.current.length);
     }
-    if (tool === "move") updateSelection(selectionOriginRef.current);
+    if (["move", "resize"].includes(tool)) updateSelection(selectionOriginRef.current);
     pendingPointRef.current = null;
     previousPointRef.current = null;
     drawingBaseRef.current = null;
     activeOperationsRef.current = [];
+    resizeHandleRef.current = null;
     drawingRef.current = false;
     strokeApertureRef.current = null;
-    if (tool !== "select") resetEditableRectangle();
+    if (tool !== "select") resetEditableShape();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -870,7 +1043,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   function clearAperture() {
     cancelPolygon(false);
     saveHistory();
-    resetEditableRectangle();
+    resetEditableShape();
     clearSelection();
     const next = { amplitude: new Float32Array(size * size), phase: new Float32Array(size * size) };
     strokeApertureRef.current = null;
@@ -883,7 +1056,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     if (cancelPolygon()) return;
     const previous = historyRef.current.pop();
     if (previous) {
-      resetEditableRectangle();
+      resetEditableShape();
       clearSelection();
       strokeApertureRef.current = null;
       apertureRef.current = previous;
@@ -927,7 +1100,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       const next = decodeAperture(item.data, size);
       cancelPolygon(false);
       saveHistory();
-      resetEditableRectangle();
+      resetEditableShape();
       clearSelection();
       strokeApertureRef.current = null;
       apertureRef.current = next;
@@ -985,33 +1158,19 @@ export const ApertureEditor = memo(function ApertureEditor({
                 aria-label={label}
                 title={label}
               >
-                <Icon size={19} weight={tool === id ? "fill" : "regular"} />
+                <Icon className={id === "ellipse" ? "ellipse-tool-icon" : undefined} size={19} weight={tool === id ? "fill" : "regular"} />
               </button>
             ))}
-            <details className="repeat-menu toolbar-repeat-menu">
-              <summary title="周期性重复当前选区" aria-label="周期性重复当前选区">
-                <Repeat size={17} /><span>重复单元</span>
-              </summary>
-              <div className="repeat-panel">
-                <header><strong>周期重复</strong><span>当前选区</span></header>
-                <div className="repeat-direction" role="group" aria-label="重复方向">
-                  <button type="button" className={repeatDirection === "horizontal" ? "active" : ""} onClick={() => setRepeatDirection("horizontal")}>横向 →</button>
-                  <button type="button" className={repeatDirection === "vertical" ? "active" : ""} onClick={() => setRepeatDirection("vertical")}>纵向 ↓</button>
-                </div>
-                <label>
-                  <span>副本数量</span><output>{repeatCount}</output>
-                  <input type="range" min="1" max="12" value={repeatCount} onChange={(event) => setRepeatCount(Number(event.target.value))} />
-                </label>
-                <label>
-                  <span>单元间距</span><output>{repeatSpacing}px</output>
-                  <input type="range" min="0" max="96" value={repeatSpacing} onChange={(event) => setRepeatSpacing(Number(event.target.value))} />
-                </label>
-                <button type="button" className="repeat-apply" onClick={repeatSelection} disabled={!selection}>
-                  <Repeat size={15} /> 生成副本
-                </button>
-                <p aria-live="polite">{repeatMessage}</p>
-              </div>
-            </details>
+            <button
+              type="button"
+              className={`toolbar-repeat-button ${repeatPanelOpen ? "active" : ""}`}
+              onClick={() => setRepeatPanelOpen((openPanel) => !openPanel)}
+              title="周期性重复当前选区"
+              aria-label="周期性重复当前选区"
+              aria-expanded={repeatPanelOpen}
+            >
+              <Repeat size={17} /><span>重复单元</span>
+            </button>
           </div>
         )}
         <div className="aperture-canvas-shell">
@@ -1041,7 +1200,7 @@ export const ApertureEditor = memo(function ApertureEditor({
           </svg>
           {selection && (
             <div
-              className="selection-marquee"
+              className={`selection-marquee ${tool === "resize" ? "resizable" : ""}`}
               style={{
                 left: `${(selection.left / size) * 100}%`,
                 top: `${(selection.top / size) * 100}%`,
@@ -1050,7 +1209,10 @@ export const ApertureEditor = memo(function ApertureEditor({
               }}
               aria-hidden="true"
             >
-              <span>{Math.round(selection.right - selection.left)} × {Math.round(selection.bottom - selection.top)}</span>
+              <span className="selection-size">{Math.round(selection.right - selection.left)} × {Math.round(selection.bottom - selection.top)}</span>
+              {tool === "resize" && RESIZE_HANDLES.map((handle) => (
+                <i key={handle} className={`selection-resize-handle handle-${handle}`} />
+              ))}
             </div>
           )}
           {tool === "polygon" && polygonVertices.length > 0 && (
@@ -1067,41 +1229,62 @@ export const ApertureEditor = memo(function ApertureEditor({
       </div>
 
       {mode === "draw" ? (
-        <div className={`draw-controls ${tool === "rectangle" ? "rectangle-controls" : ""} ${tool === "polygon" ? "polygon-controls" : ""} ${["select", "move"].includes(tool) ? "selection-controls" : ""}`}>
-          {tool === "rectangle" ? (
+        <div className={`draw-controls ${["rectangle", "ellipse"].includes(tool) ? "rectangle-controls" : ""} ${tool === "polygon" ? "polygon-controls" : ""} ${["select", "move", "resize"].includes(tool) ? "selection-controls" : ""} ${repeatPanelOpen ? "repeat-panel-visible" : ""}`}>
+          {repeatPanelOpen && (
+            <div className="repeat-panel repeat-panel-docked">
+              <header><strong>周期重复</strong><span>当前选区</span></header>
+              <div className="repeat-direction" role="group" aria-label="重复方向">
+                <button type="button" className={repeatDirection === "horizontal" ? "active" : ""} onClick={() => setRepeatDirection("horizontal")}>横向 →</button>
+                <button type="button" className={repeatDirection === "vertical" ? "active" : ""} onClick={() => setRepeatDirection("vertical")}>纵向 ↓</button>
+              </div>
+              <label>
+                <span>副本数量</span><output>{repeatCount}</output>
+                <input type="range" min="1" max="12" value={repeatCount} onChange={(event) => setRepeatCount(Number(event.target.value))} />
+              </label>
+              <label>
+                <span>单元间距</span><output>{repeatSpacing}px</output>
+                <input type="range" min="0" max="96" value={repeatSpacing} onChange={(event) => setRepeatSpacing(Number(event.target.value))} />
+              </label>
+              <button type="button" className="repeat-apply" onClick={repeatSelection} disabled={!selection}>
+                <Repeat size={15} /> 生成副本
+              </button>
+              <p aria-live="polite">{repeatMessage}</p>
+            </div>
+          )}
+          {["rectangle", "ellipse"].includes(tool) ? (
             <>
               <label className={!rectangleEditable ? "disabled" : ""}>
-                <span>矩形宽度</span>
+                <span>{tool === "ellipse" ? "椭圆宽度" : "矩形宽度"}</span>
                 <input
                   type="range"
                   min="2"
                   max={size}
                   value={rectangleWidth}
                   disabled={!rectangleEditable}
-                  onChange={(event) => updateEditableRectangle("width", Number(event.target.value))}
-                  onPointerUp={finalizeRectangleAdjustment}
-                  onKeyUp={finalizeRectangleAdjustment}
-                  onBlur={finalizeRectangleAdjustment}
+                  onChange={(event) => updateEditableShape("width", Number(event.target.value))}
+                  onPointerUp={finalizeShapeAdjustment}
+                  onKeyUp={finalizeShapeAdjustment}
+                  onBlur={finalizeShapeAdjustment}
                 />
                 <output>{rectangleWidth}px</output>
               </label>
               <label className={!rectangleEditable ? "disabled" : ""}>
-                <span>矩形高度</span>
+                <span>{tool === "ellipse" ? "椭圆高度" : "矩形高度"}</span>
                 <input
                   type="range"
                   min="2"
                   max={size}
                   value={rectangleHeight}
                   disabled={!rectangleEditable}
-                  onChange={(event) => updateEditableRectangle("height", Number(event.target.value))}
-                  onPointerUp={finalizeRectangleAdjustment}
-                  onKeyUp={finalizeRectangleAdjustment}
-                  onBlur={finalizeRectangleAdjustment}
+                  onChange={(event) => updateEditableShape("height", Number(event.target.value))}
+                  onPointerUp={finalizeShapeAdjustment}
+                  onKeyUp={finalizeShapeAdjustment}
+                  onBlur={finalizeShapeAdjustment}
                 />
                 <output>{rectangleHeight}px</output>
               </label>
             </>
-          ) : !["select", "move"].includes(tool) ? (
+          ) : !["select", "move", "resize"].includes(tool) ? (
             <label>
               <span>{tool === "line" ? "直线粗细" : tool === "polygon" ? "边线粗细" : "工具尺寸"}</span>
               <input type="range" min={tool === "line" || tool === "polygon" ? "2" : "8"} max="120" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
@@ -1117,7 +1300,7 @@ export const ApertureEditor = memo(function ApertureEditor({
               </div>
             </div>
           )}
-          {!["select", "move", "eraser"].includes(tool) && (
+          {!["select", "move", "resize", "eraser"].includes(tool) && (
             <label>
               <span>透光率 |T|</span>
               <input type="range" min="0" max="1" step="0.05" value={transmission} onChange={(event) => setTransmission(Number(event.target.value))} />
@@ -1130,12 +1313,12 @@ export const ApertureEditor = memo(function ApertureEditor({
               <button type="button" onClick={() => cancelPolygon()} disabled={polygonVertices.length === 0}><X size={14} /> 取消</button>
             </div>
           )}
-          {["select", "move"].includes(tool) && selection && (
+          {["select", "move", "resize"].includes(tool) && selection && (
             <button type="button" className="clear-selection-action" onClick={clearSelection}><X size={14} /> 取消选区</button>
           )}
           <p className="tool-status" aria-live="polite">{toolMessage}</p>
           <div className="canvas-actions utility-actions">
-            <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销（剩余 ${undoCount}/3 步）`}>
+            <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销 Ctrl+Z（剩余 ${undoCount}/3 步）`}>
               <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
             </button>
             <button type="button" onClick={clearAperture} title="清空衍射屏全部内容"><Trash size={17} /><span>清空画布</span></button>

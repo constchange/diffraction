@@ -86,6 +86,64 @@ export function paintRectangleInto({ amplitude, phase, size, from, to, transmiss
   return { amplitude, phase };
 }
 
+export function constrainEllipseToCircle(from, to, size = Infinity) {
+  const directionX = to.x < from.x ? -1 : 1;
+  const directionY = to.y < from.y ? -1 : 1;
+  const maximumX = Number.isFinite(size) ? (directionX > 0 ? size - from.x : from.x) : Infinity;
+  const maximumY = Number.isFinite(size) ? (directionY > 0 ? size - from.y : from.y) : Infinity;
+  const side = Math.max(0, Math.min(
+    Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)),
+    maximumX,
+    maximumY,
+  ));
+  return {
+    ...to,
+    x: from.x + directionX * side,
+    y: from.y + directionY * side,
+  };
+}
+
+export function paintEllipseInto({ amplitude, phase, size, from, to, transmission }) {
+  const left = Math.max(0, Math.min(from.x, to.x));
+  const right = Math.min(size, Math.max(from.x, to.x));
+  const top = Math.max(0, Math.min(from.y, to.y));
+  const bottom = Math.min(size, Math.max(from.y, to.y));
+  const radiusX = (right - left) / 2;
+  const radiusY = (bottom - top) / 2;
+  if (radiusX <= 0 || radiusY <= 0) return { amplitude, phase };
+
+  const centreX = (left + right) / 2;
+  const centreY = (top + bottom) / 2;
+  const minimumX = Math.max(0, Math.floor(left));
+  const maximumX = Math.min(size - 1, Math.ceil(right) - 1);
+  const minimumY = Math.max(0, Math.floor(top));
+  const maximumY = Math.min(size - 1, Math.ceil(bottom) - 1);
+  const value = Math.max(0, Math.min(1, transmission));
+  const samples = 4;
+
+  for (let y = minimumY; y <= maximumY; y += 1) {
+    for (let x = minimumX; x <= maximumX; x += 1) {
+      let inside = 0;
+      for (let sy = 0; sy < samples; sy += 1) {
+        const dy = (y + (sy + 0.5) / samples - centreY) / radiusY;
+        for (let sx = 0; sx < samples; sx += 1) {
+          const dx = (x + (sx + 0.5) / samples - centreX) / radiusX;
+          if (dx * dx + dy * dy <= 1) inside += 1;
+        }
+      }
+      applyCoverage(
+        amplitude,
+        phase,
+        y * size + x,
+        value,
+        inside / (samples * samples),
+        false,
+      );
+    }
+  }
+  return { amplitude, phase };
+}
+
 function pointInPolygon(vertices, x, y) {
   let inside = false;
   for (let current = 0, previous = vertices.length - 1; current < vertices.length; previous = current, current += 1) {
@@ -205,6 +263,16 @@ export function paintDrawingOperationInto({ amplitude, phase, size, operation, o
       transmission: operation.transmission,
     });
   }
+  if (operation.kind === "ellipse") {
+    return paintEllipseInto({
+      amplitude,
+      phase,
+      size,
+      from: { x: operation.from.x + offsetX, y: operation.from.y + offsetY },
+      to: { x: operation.to.x + offsetX, y: operation.to.y + offsetY },
+      transmission: operation.transmission,
+    });
+  }
   if (operation.kind === "segment") {
     return paintSegmentInto({
       amplitude,
@@ -250,7 +318,7 @@ export function drawingUnitBounds(operations) {
   let top = Infinity;
   let bottom = -Infinity;
   for (const operation of operations) {
-    if (operation.kind === "rectangle") {
+    if (["rectangle", "ellipse"].includes(operation.kind)) {
       left = Math.min(left, operation.from.x, operation.to.x);
       right = Math.max(right, operation.from.x, operation.to.x);
       top = Math.min(top, operation.from.y, operation.to.y);
@@ -366,6 +434,123 @@ export function repeatApertureSelectionInto({
   }
 
   return { amplitude, phase };
+}
+
+export function constrainPointToAxis(from, to) {
+  if (Math.abs(to.x - from.x) >= Math.abs(to.y - from.y)) {
+    return { ...to, y: from.y };
+  }
+  return { ...to, x: from.x };
+}
+
+export function resizedSelectionBounds(bounds, handle, point, size, lockAspect = false) {
+  if (!bounds || !new Set(["nw", "ne", "se", "sw"]).has(handle)) return bounds;
+  const originalWidth = Math.max(1, bounds.right - bounds.left);
+  const originalHeight = Math.max(1, bounds.bottom - bounds.top);
+  const growsRight = handle.endsWith("e");
+  const growsDown = handle.startsWith("s");
+  const anchorX = growsRight ? bounds.left : bounds.right;
+  const anchorY = growsDown ? bounds.top : bounds.bottom;
+  const maximumWidth = growsRight ? size - anchorX : anchorX;
+  const maximumHeight = growsDown ? size - anchorY : anchorY;
+  const requestedWidth = growsRight ? point.x - anchorX : anchorX - point.x;
+  const requestedHeight = growsDown ? point.y - anchorY : anchorY - point.y;
+  let width = Math.max(1, Math.min(maximumWidth, requestedWidth));
+  let height = Math.max(1, Math.min(maximumHeight, requestedHeight));
+
+  if (lockAspect) {
+    const requestedScale = Math.max(width / originalWidth, height / originalHeight);
+    const maximumScale = Math.min(maximumWidth / originalWidth, maximumHeight / originalHeight);
+    const minimumScale = Math.max(1 / originalWidth, 1 / originalHeight);
+    const scale = Math.max(minimumScale, Math.min(maximumScale, requestedScale));
+    width = Math.max(1, Math.round(originalWidth * scale));
+    height = Math.max(1, Math.round(originalHeight * scale));
+  } else {
+    width = Math.max(1, Math.round(width));
+    height = Math.max(1, Math.round(height));
+  }
+
+  return {
+    left: growsRight ? anchorX : anchorX - width,
+    right: growsRight ? anchorX + width : anchorX,
+    top: growsDown ? anchorY : anchorY - height,
+    bottom: growsDown ? anchorY + height : anchorY,
+  };
+}
+
+export function scaleApertureSelection({ amplitude, phase, size, bounds, targetBounds }) {
+  if (!bounds || !targetBounds) return { amplitude, phase };
+  const sourceLeft = Math.max(0, Math.min(size, Math.floor(bounds.left)));
+  const sourceRight = Math.max(0, Math.min(size, Math.ceil(bounds.right)));
+  const sourceTop = Math.max(0, Math.min(size, Math.floor(bounds.top)));
+  const sourceBottom = Math.max(0, Math.min(size, Math.ceil(bounds.bottom)));
+  const targetLeft = Math.max(0, Math.min(size, Math.floor(targetBounds.left)));
+  const targetRight = Math.max(0, Math.min(size, Math.ceil(targetBounds.right)));
+  const targetTop = Math.max(0, Math.min(size, Math.floor(targetBounds.top)));
+  const targetBottom = Math.max(0, Math.min(size, Math.ceil(targetBounds.bottom)));
+  const sourceWidth = sourceRight - sourceLeft;
+  const sourceHeight = sourceBottom - sourceTop;
+  const targetWidth = targetRight - targetLeft;
+  const targetHeight = targetBottom - targetTop;
+  if (sourceWidth <= 0 || sourceHeight <= 0 || targetWidth <= 0 || targetHeight <= 0) {
+    return { amplitude, phase };
+  }
+
+  const sourceReal = new Float32Array(sourceWidth * sourceHeight);
+  const sourceImaginary = new Float32Array(sourceWidth * sourceHeight);
+  for (let y = 0; y < sourceHeight; y += 1) {
+    for (let x = 0; x < sourceWidth; x += 1) {
+      const source = (sourceTop + y) * size + sourceLeft + x;
+      const destination = y * sourceWidth + x;
+      sourceReal[destination] = amplitude[source] * Math.cos(phase[source]);
+      sourceImaginary[destination] = amplitude[source] * Math.sin(phase[source]);
+    }
+  }
+
+  const nextAmplitude = new Float32Array(amplitude);
+  const nextPhase = new Float32Array(phase);
+  for (let y = sourceTop; y < sourceBottom; y += 1) {
+    nextAmplitude.fill(0, y * size + sourceLeft, y * size + sourceRight);
+    nextPhase.fill(0, y * size + sourceLeft, y * size + sourceRight);
+  }
+
+  for (let y = 0; y < targetHeight; y += 1) {
+    const sourceY = Math.max(0, Math.min(
+      sourceHeight - 1,
+      ((y + 0.5) * sourceHeight) / targetHeight - 0.5,
+    ));
+    const y0 = Math.floor(sourceY);
+    const y1 = Math.min(sourceHeight - 1, y0 + 1);
+    const blendY = sourceY - y0;
+    for (let x = 0; x < targetWidth; x += 1) {
+      const sourceX = Math.max(0, Math.min(
+        sourceWidth - 1,
+        ((x + 0.5) * sourceWidth) / targetWidth - 0.5,
+      ));
+      const x0 = Math.floor(sourceX);
+      const x1 = Math.min(sourceWidth - 1, x0 + 1);
+      const blendX = sourceX - x0;
+      const topLeft = y0 * sourceWidth + x0;
+      const topRight = y0 * sourceWidth + x1;
+      const bottomLeft = y1 * sourceWidth + x0;
+      const bottomRight = y1 * sourceWidth + x1;
+      const topReal = sourceReal[topLeft] + (sourceReal[topRight] - sourceReal[topLeft]) * blendX;
+      const topImaginary = sourceImaginary[topLeft]
+        + (sourceImaginary[topRight] - sourceImaginary[topLeft]) * blendX;
+      const bottomReal = sourceReal[bottomLeft]
+        + (sourceReal[bottomRight] - sourceReal[bottomLeft]) * blendX;
+      const bottomImaginary = sourceImaginary[bottomLeft]
+        + (sourceImaginary[bottomRight] - sourceImaginary[bottomLeft]) * blendX;
+      const real = topReal + (bottomReal - topReal) * blendY;
+      const imaginary = topImaginary + (bottomImaginary - topImaginary) * blendY;
+      const destination = (targetTop + y) * size + targetLeft + x;
+      const modulus = Math.hypot(real, imaginary);
+      nextAmplitude[destination] = Math.min(1, modulus);
+      nextPhase[destination] = modulus > 1e-7 ? Math.atan2(imaginary, real) : 0;
+    }
+  }
+
+  return { amplitude: nextAmplitude, phase: nextPhase };
 }
 
 export function moveApertureSelection({ amplitude, phase, size, bounds, offsetX, offsetY }) {
