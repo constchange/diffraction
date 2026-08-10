@@ -1232,7 +1232,18 @@ export const ApertureEditor = memo(function ApertureEditor({
         <div className={`draw-controls ${["rectangle", "ellipse"].includes(tool) ? "rectangle-controls" : ""} ${tool === "polygon" ? "polygon-controls" : ""} ${["select", "move", "resize"].includes(tool) ? "selection-controls" : ""} ${repeatPanelOpen ? "repeat-panel-visible" : ""}`}>
           {repeatPanelOpen && (
             <div className="repeat-panel repeat-panel-docked">
-              <header><strong>周期重复</strong><span>当前选区</span></header>
+              <header>
+                <div className="repeat-panel-title"><strong>周期重复</strong><span>当前选区</span></div>
+                <button
+                  type="button"
+                  className="repeat-panel-close"
+                  onClick={() => setRepeatPanelOpen(false)}
+                  title="关闭重复单元面板"
+                  aria-label="关闭重复单元面板"
+                >
+                  <X size={14} />
+                </button>
+              </header>
               <div className="repeat-direction" role="group" aria-label="重复方向">
                 <button type="button" className={repeatDirection === "horizontal" ? "active" : ""} onClick={() => setRepeatDirection("horizontal")}>横向 →</button>
                 <button type="button" className={repeatDirection === "vertical" ? "active" : ""} onClick={() => setRepeatDirection("vertical")}>纵向 ↓</button>
