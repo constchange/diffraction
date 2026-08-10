@@ -27,7 +27,7 @@ import {
   paintDrawingOperationInto,
   paintPolygonInto,
   paintRectangleInto,
-  repeatDrawingUnitInto,
+  repeatApertureSelectionInto,
 } from "../core/drawing.js";
 import {
   decodeAperture,
@@ -77,7 +77,6 @@ export const ApertureEditor = memo(function ApertureEditor({
   const pendingPointRef = useRef(null);
   const drawingBaseRef = useRef(null);
   const activeOperationsRef = useRef([]);
-  const lastUnitRef = useRef(null);
   const editableRectangleRef = useRef(null);
   const selectionRef = useRef(null);
   const selectionOriginRef = useRef(null);
@@ -105,8 +104,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   const [repeatCount, setRepeatCount] = useState(2);
   const [repeatSpacing, setRepeatSpacing] = useState(12);
   const [repeatDirection, setRepeatDirection] = useState("horizontal");
-  const [hasRepeatableUnit, setHasRepeatableUnit] = useState(false);
-  const [repeatMessage, setRepeatMessage] = useState("请先绘制一个单元");
+  const [repeatMessage, setRepeatMessage] = useState("请先用矩形选框选择一个单元");
   const [formula, setFormula] = useState(FORMULA_PRESETS[1].latex);
   const [formulaState, setFormulaState] = useState({ state: "ready", message: "可实时解析复振幅" });
   const [undoCount, setUndoCount] = useState(0);
@@ -146,7 +144,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       if (payload.requestId !== formulaRequestRef.current) return;
       if (payload.type === "formula-result") {
         saveHistory();
-        invalidateLastUnit();
+        resetEditableRectangle();
         clearSelection();
         const next = { amplitude: payload.amplitude, phase: payload.phase };
         apertureRef.current = next;
@@ -248,12 +246,9 @@ export const ApertureEditor = memo(function ApertureEditor({
     setUndoCount(historyRef.current.length);
   }
 
-  function invalidateLastUnit() {
-    lastUnitRef.current = null;
+  function resetEditableRectangle() {
     editableRectangleRef.current = null;
-    setHasRepeatableUnit(false);
     setRectangleEditable(false);
-    setRepeatMessage("请先绘制一个单元");
   }
 
   function cloneAperture(source) {
@@ -266,6 +261,9 @@ export const ApertureEditor = memo(function ApertureEditor({
   function updateSelection(next) {
     selectionRef.current = next;
     setSelection(next);
+    setRepeatMessage(next
+      ? `当前选区 ${Math.round(next.right - next.left)} × ${Math.round(next.bottom - next.top)} px`
+      : "请先用矩形选框选择一个单元");
   }
 
   function clearSelection() {
@@ -453,7 +451,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     }
     if (polygonVerticesRef.current.length === 0) {
       saveHistory();
-      invalidateLastUnit();
+      resetEditableRectangle();
       clearSelection();
       drawingBaseRef.current = apertureRef.current;
       mutationRevisionRef.current = 0;
@@ -485,9 +483,6 @@ export const ApertureEditor = memo(function ApertureEditor({
     });
     apertureRef.current = next;
     strokeApertureRef.current = null;
-    lastUnitRef.current = { operations: [operation] };
-    setHasRepeatableUnit(true);
-    setRepeatMessage("可重复最近一次绘制单元");
     renderAmplitude(next.amplitude);
     onChange(next, { quality: "final" });
     polygonVerticesRef.current = [];
@@ -600,7 +595,6 @@ export const ApertureEditor = memo(function ApertureEditor({
       operation,
     });
     apertureRef.current = next;
-    lastUnitRef.current = { operations: [operation] };
     renderAmplitude(next.amplitude);
     onPreview?.(next, { quality: "live" });
   }
@@ -610,20 +604,19 @@ export const ApertureEditor = memo(function ApertureEditor({
     onChange(apertureRef.current, { quality: "final" });
   }
 
-  function repeatLastUnit() {
-    const unit = lastUnitRef.current;
-    if (!unit?.operations?.length) {
-      setRepeatMessage("请先绘制一个单元");
+  function repeatSelection() {
+    const activeSelection = selectionRef.current;
+    if (!activeSelection) {
+      setRepeatMessage("请先用矩形选框选择一个单元");
       return;
     }
-    clearSelection();
     saveHistory();
     const next = cloneAperture(apertureRef.current);
-    repeatDrawingUnitInto({
+    repeatApertureSelectionInto({
       amplitude: next.amplitude,
       phase: next.phase,
       size,
-      operations: unit.operations,
+      bounds: activeSelection,
       count: repeatCount,
       spacing: repeatSpacing,
       direction: repeatDirection,
@@ -698,7 +691,7 @@ export const ApertureEditor = memo(function ApertureEditor({
 
     saveHistory();
     const current = apertureRef.current;
-    invalidateLastUnit();
+    resetEditableRectangle();
     drawingBaseRef.current = current;
     activeOperationsRef.current = [];
     if (tool === "move") {
@@ -828,9 +821,6 @@ export const ApertureEditor = memo(function ApertureEditor({
     strokeApertureRef.current = null;
     if (finalSnapshot) {
       apertureRef.current = finalSnapshot;
-      lastUnitRef.current = { operations: activeOperationsRef.current };
-      setHasRepeatableUnit(true);
-      setRepeatMessage("可重复最近一次绘制单元");
       onChange(finalSnapshot, { quality: "final" });
     }
     finishPointerInteraction(event);
@@ -871,7 +861,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     activeOperationsRef.current = [];
     drawingRef.current = false;
     strokeApertureRef.current = null;
-    if (tool !== "select") invalidateLastUnit();
+    if (tool !== "select") resetEditableRectangle();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -880,7 +870,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   function clearAperture() {
     cancelPolygon(false);
     saveHistory();
-    invalidateLastUnit();
+    resetEditableRectangle();
     clearSelection();
     const next = { amplitude: new Float32Array(size * size), phase: new Float32Array(size * size) };
     strokeApertureRef.current = null;
@@ -893,7 +883,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     if (cancelPolygon()) return;
     const previous = historyRef.current.pop();
     if (previous) {
-      invalidateLastUnit();
+      resetEditableRectangle();
       clearSelection();
       strokeApertureRef.current = null;
       apertureRef.current = previous;
@@ -937,7 +927,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       const next = decodeAperture(item.data, size);
       cancelPolygon(false);
       saveHistory();
-      invalidateLastUnit();
+      resetEditableRectangle();
       clearSelection();
       strokeApertureRef.current = null;
       apertureRef.current = next;
@@ -999,11 +989,11 @@ export const ApertureEditor = memo(function ApertureEditor({
               </button>
             ))}
             <details className="repeat-menu toolbar-repeat-menu">
-              <summary title="周期性重复最近绘制单元" aria-label="周期性重复最近绘制单元">
+              <summary title="周期性重复当前选区" aria-label="周期性重复当前选区">
                 <Repeat size={17} /><span>重复单元</span>
               </summary>
               <div className="repeat-panel">
-                <header><strong>周期重复</strong><span>最近绘制单元</span></header>
+                <header><strong>周期重复</strong><span>当前选区</span></header>
                 <div className="repeat-direction" role="group" aria-label="重复方向">
                   <button type="button" className={repeatDirection === "horizontal" ? "active" : ""} onClick={() => setRepeatDirection("horizontal")}>横向 →</button>
                   <button type="button" className={repeatDirection === "vertical" ? "active" : ""} onClick={() => setRepeatDirection("vertical")}>纵向 ↓</button>
@@ -1016,7 +1006,7 @@ export const ApertureEditor = memo(function ApertureEditor({
                   <span>单元间距</span><output>{repeatSpacing}px</output>
                   <input type="range" min="0" max="96" value={repeatSpacing} onChange={(event) => setRepeatSpacing(Number(event.target.value))} />
                 </label>
-                <button type="button" className="repeat-apply" onClick={repeatLastUnit} disabled={!hasRepeatableUnit}>
+                <button type="button" className="repeat-apply" onClick={repeatSelection} disabled={!selection}>
                   <Repeat size={15} /> 生成副本
                 </button>
                 <p aria-live="polite">{repeatMessage}</p>

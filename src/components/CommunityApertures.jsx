@@ -4,7 +4,6 @@ import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
 import { FolderOpen } from "@phosphor-icons/react/FolderOpen";
 import { GlobeHemisphereWest } from "@phosphor-icons/react/GlobeHemisphereWest";
-import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { Trash } from "@phosphor-icons/react/Trash";
 import { X } from "@phosphor-icons/react/X";
 import { decodeAperture, encodeAperture } from "../core/apertureStorage.js";
@@ -155,7 +154,7 @@ export function CommunityApertures({
       return;
     }
     setAction("upload");
-    setNotice({ type: "info", message: "正在执行基础内容检查并上传…" });
+    setNotice({ type: "info", message: "正在上传…" });
     try {
       const result = await uploadCommunityAperture(apiBase, {
         slot: selectedSlot,
@@ -281,9 +280,8 @@ export function CommunityApertures({
               </div>
               <label><span>你的昵称</span><input value={nickname} maxLength="20" placeholder="例如：小光" onChange={(event) => setNickname(event.target.value)} /></label>
               <label><span>衍射屏名称</span><input value={patternName} maxLength="32" placeholder="例如：六边形阵列" onChange={(event) => setPatternName(event.target.value)} /></label>
-              <div className="community-moderation-note"><ShieldCheck size={16} weight="duotone" /><span>上传前进行本地敏感词与已知违规图样规则检查；这是基础审核，不能替代专业内容审核。</span></div>
               <button type="button" className="community-upload-action" onClick={handleUpload} disabled={Boolean(action) || loadingMine}>
-                <CloudArrowUp size={17} /> {action === "upload" ? "检查并上传中…" : selectedRecord ? `覆盖第 ${selectedSlot} 档` : `上传到第 ${selectedSlot} 档`}
+                <CloudArrowUp size={17} /> {action === "upload" ? "上传中…" : selectedRecord ? `覆盖第 ${selectedSlot} 档` : `上传到第 ${selectedSlot} 档`}
               </button>
             </div>
 
