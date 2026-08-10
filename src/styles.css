@@ -1096,6 +1096,12 @@ input[type="range"] {
   box-shadow: 0 0 40px rgba(95, 70, 255, 0.1);
 }
 
+@media (min-width: 861px) {
+  .diffraction-canvas {
+    transform: translateY(-10px);
+  }
+}
+
 .screen-caption {
   display: flex;
   min-height: 48px;
@@ -2169,6 +2175,15 @@ input[type="range"] {
     padding: 12px;
   }
 
+  .aperture-workspace {
+    place-items: center end;
+    padding: 12px 8px 12px 96px;
+  }
+
+  .drawing-toolbar {
+    left: 4px;
+  }
+
   .module-header {
     padding: 0 10px;
   }
@@ -2179,7 +2194,7 @@ input[type="range"] {
   }
 
   .aperture-canvas-shell {
-    width: min(76%, 320px);
+    width: min(100%, 320px);
   }
 
   .inspector-panel {
@@ -2303,7 +2318,16 @@ input[type="range"] {
   }
 
   .aperture-canvas-shell {
-    width: min(68%, 260px);
+    width: min(100%, 260px);
+  }
+
+  .aperture-workspace {
+    place-items: center end;
+    padding: 10px 8px 10px 92px;
+  }
+
+  .drawing-toolbar {
+    left: 4px;
   }
 
   .observation-canvas-shell {
@@ -2312,6 +2336,7 @@ input[type="range"] {
 
   .diffraction-canvas {
     width: min(88%, 300px);
+    transform: translateY(-27px);
   }
 
   .draw-controls,
