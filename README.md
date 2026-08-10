@@ -1,6 +1,6 @@
 # 启慧研习院 · 夫朗禾费衍射仿真
 
-一个纯前端、可绘制复振幅屏函数的夫朗禾费衍射实验。衍射图样由浏览器内的二维 FFT 实时计算，不依赖后端服务。
+一个可绘制复振幅屏函数的夫朗禾费衍射实验。衍射图样由浏览器内的二维 FFT 实时计算；可选的公共衍射屏空间由 EdgeOne Functions 与 Supabase 提供。
 
 ## 本地开发
 
@@ -24,6 +24,9 @@ npm run test:sites
 - `src/core/formula.js`：LaTeX 屏函数转换、复数求值与内置屏函数预设。
 - `src/workers/`：复屏函数求值与二维 FFT 均在 Web Worker 中执行，避免阻塞界面。
 - `src/embed.jsx`：面向非 React 宿主的挂载入口。
+- `src/components/CommunityApertures.jsx`：公共衍射屏的浏览、上传、覆盖、删除与载入界面。
+- `edge-functions/api/community-apertures/`：EdgeOne 服务端 API，执行 IP 三档限制、审核与 Supabase 读写。
+- `supabase/community_apertures.sql`：可直接在 Supabase SQL Editor 中执行的数据结构与权限配置。
 
 屏函数坐标约定为 `x,y ∈ [-1,1]`，支持 `rect`、`circ`、`tri`、`sin`、`cos`、`exp`、`sqrt`、`abs`、`atan2` 与复数单位 `i`。屏函数的模会被限制到 `[0,1]`，相位参与衍射计算但不在衍射屏灰度预览中显示。
 
@@ -46,6 +49,22 @@ npm run test:sites
 
 默认资源基路径为 `/`，适合绑定在独立域名根路径，避免静态资源被错误解析成 `/assets/assets/...`。如果需要部署到子路径，可在构建环境中设置 `VITE_BASE_PATH=/子路径/`。
 
+### 启用公共衍射屏
+
+1. 在 Supabase Dashboard 的 SQL Editor 中完整执行 [`supabase/community_apertures.sql`](./supabase/community_apertures.sql)。
+2. 在 EdgeOne 项目环境变量中配置：
+
+```text
+SUPABASE_URL=https://你的项目.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_...
+```
+
+也兼容把第二项命名为 `SUPABASE_KEY`，以及旧版 JWT 格式的 `service_role` Key。必须使用 Secret/Service Role Key，不能使用 `anon` 或 Publishable Key；密钥只由 `edge-functions` 读取，不会进入 Vite 前端产物。
+
+公共空间使用 `request.eo.clientIp` 获取 EdgeOne 提供的真实客户端 IP，再由 Supabase 中一次性生成的私有盐计算 HMAC-SHA-256 摘要。数据库不保存原始 IP，轮换 API Key 也不会改变档位归属；唯一约束保证每个 IP 摘要只有 1–3 三个档位。公共列表分页且只返回 48×48 预览，点击载入时才获取完整复振幅数据。
+
+基础审核覆盖昵称/名称敏感词与已知违规图样哈希。词库可在 `community_blocked_terms` 表继续维护；把已确认违规图样的 `pattern_hash` 写入 `community_blocked_pattern_hashes` 后，数据库触发器会清除已有同哈希作品，服务端也会拒绝后续上传。该本地规则方案不能替代专业语义内容审核服务。
+
 ## 嵌入其他网页
 
 生产构建会额外输出稳定入口 `dist/client/embed.js`。宿主页面可使用 ES Module：
@@ -54,7 +73,9 @@ npm run test:sites
 <div id="diffraction-lab"></div>
 <script type="module">
   import { mountFraunhoferLab } from "/path/to/embed.js";
-  const unmount = mountFraunhoferLab(document.querySelector("#diffraction-lab"));
+  const unmount = mountFraunhoferLab(document.querySelector("#diffraction-lab"), {
+    communityApiBase: "/api/community-apertures",
+  });
   // 页面销毁时调用 unmount();
 </script>
 ```

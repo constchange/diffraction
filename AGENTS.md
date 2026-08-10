@@ -15,3 +15,4 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Keep the physical Fraunhofer apparatus diagram above the simulator, in this order: source, collimating convex lens, aperture screen, Fourier convex lens, observation screen.
 - Do not merge the separate pale-blue “引力场” dashboard direction into this simulator. That visual direction is reserved for a different product surface.
 - Keep the scientific canvas genuinely interactive and computation-backed; do not substitute pre-rendered diffraction imagery for the FFT result.
+- Keep community uploads behind same-origin EdgeOne Functions. Never expose the Supabase Secret/Service Role key or raw client IP in frontend code or stored rows.

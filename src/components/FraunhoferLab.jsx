@@ -15,6 +15,7 @@ import { ApertureEditor } from "./ApertureEditor.jsx";
 import { DiffractionCanvas } from "./DiffractionCanvas.jsx";
 import { FraunhoferApparatus } from "./FraunhoferApparatus.jsx";
 import { WavelengthBar, wavelengthToRgb } from "./WavelengthBar.jsx";
+import { CommunityApertures } from "./CommunityApertures.jsx";
 
 function Formula({ children, displayMode = false }) {
   const markup = useMemo(
@@ -47,10 +48,11 @@ function SliderField({ label, symbol, valueText, min, max, step, value, onChange
   );
 }
 
-export function FraunhoferLab({ compact = false }) {
+export function FraunhoferLab({ compact = false, communityApiBase = "/api/community-apertures" }) {
   const initialApertureRef = useRef(null);
   if (!initialApertureRef.current) initialApertureRef.current = createAperture(APERTURE_SIZE);
   const initialAperture = initialApertureRef.current;
+  const [currentAperture, setCurrentAperture] = useState(initialAperture);
   const [wavelength, setWavelength] = useState(532);
   const [focalLength, setFocalLength] = useState(1.2);
   const [whiteLight, setWhiteLight] = useState(false);
@@ -59,6 +61,7 @@ export function FraunhoferLab({ compact = false }) {
   const [editorMode, setEditorMode] = useState("draw");
   const [displayMode, setDisplayMode] = useState("enhanced");
   const [toast, setToast] = useState("");
+  const [communityOpen, setCommunityOpen] = useState(false);
   const outputCanvasRef = useRef(null);
   const toastTimerRef = useRef(null);
   const renderParams = useMemo(() => ({
@@ -78,6 +81,7 @@ export function FraunhoferLab({ compact = false }) {
   const wavelengthColor = wavelengthToRgb(wavelength);
 
   const commitAperture = useCallback((next) => {
+    setCurrentAperture(next);
     setStats(apertureStats(next.amplitude));
     submitAperture(next, { quality: "live" });
   }, [submitAperture]);
@@ -104,6 +108,13 @@ export function FraunhoferLab({ compact = false }) {
     announce("光屏图样已保存");
   }
 
+  const loadCommunityAperture = useCallback((next, item) => {
+    setCurrentAperture(next);
+    setStats(apertureStats(next.amplitude));
+    submitAperture(next, { quality: "final" });
+    announce(`已载入“${item.patternName}”`);
+  }, [announce, submitAperture]);
+
   const lightColor = `rgb(${wavelengthColor.join(",")})`;
 
   return (
@@ -123,12 +134,13 @@ export function FraunhoferLab({ compact = false }) {
           <section className="experiment-deck" aria-label="衍射仿真实验台">
             <div className="optical-stage">
               <ApertureEditor
-                aperture={initialAperture}
+                aperture={currentAperture}
                 size={APERTURE_SIZE}
                 onChange={commitAperture}
                 onPreview={submitAperture}
                 onModeChange={setEditorMode}
                 onFunctionEditStart={pauseForFunctionEdit}
+                onOpenCommunity={() => setCommunityOpen(true)}
                 isRenderingPaused={!autoRun}
               />
 
@@ -227,6 +239,14 @@ export function FraunhoferLab({ compact = false }) {
       </main>
 
       {toast && <div className="toast-message" role="status"><BookmarkSimple size={18} weight="fill" />{toast}</div>}
+      <CommunityApertures
+        open={communityOpen}
+        aperture={currentAperture}
+        size={APERTURE_SIZE}
+        apiBase={communityApiBase}
+        onLoad={loadCommunityAperture}
+        onClose={() => setCommunityOpen(false)}
+      />
     </div>
   );
 }
