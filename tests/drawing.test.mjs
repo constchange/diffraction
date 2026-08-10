@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  constrainEllipseToCircle,
+  constrainPointToAxis,
   moveApertureSelection,
+  paintEllipseInto,
   paintPolygonInto,
   paintRectangleInto,
   paintSegmentInto,
@@ -10,6 +13,8 @@ import {
   pointInShape,
   repeatApertureSelectionInto,
   repeatDrawingUnitInto,
+  resizedSelectionBounds,
+  scaleApertureSelection,
 } from "../src/core/drawing.js";
 
 test("all built-in shape masks include their centre", () => {
@@ -108,6 +113,33 @@ test("a dragged rectangle uses its two opposite vertices and exact edge coverage
   assert.equal(phase[5 * size + 5], 0);
 });
 
+test("a dragged ellipse is anti-aliased and shift constrains it to a circle", () => {
+  const size = 32;
+  const constrained = constrainEllipseToCircle(
+    { x: 4, y: 5 },
+    { x: 17, y: 12, shiftKey: true },
+    size,
+  );
+  assert.equal(constrained.x - 4, constrained.y - 5);
+  assert.equal(constrained.x, 17);
+  assert.equal(constrained.y, 18);
+
+  const amplitude = new Float32Array(size * size);
+  const phase = new Float32Array(size * size).fill(1.1);
+  paintEllipseInto({
+    amplitude,
+    phase,
+    size,
+    from: { x: 4.25, y: 7.5 },
+    to: { x: 24.75, y: 18.5 },
+    transmission: 0.8,
+  });
+  assert.ok(Math.abs(amplitude[13 * size + 14] - 0.8) < 1e-6);
+  assert.equal(phase[13 * size + 14], 0);
+  assert.ok(amplitude.some((value) => value > 0 && value < 0.8), "ellipse edge should contain partial coverage");
+  assert.equal(amplitude[7 * size + 4], 0);
+});
+
 test("a drawing unit repeats with an edge-to-edge gap in either direction", () => {
   const size = 48;
   const horizontal = new Float32Array(size * size);
@@ -165,6 +197,49 @@ test("a rectangular selection repeats its complete complex aperture data", () =>
     assert.ok(Math.abs(phase[2 * size + 3 + offsetX] + 0.8) < 1e-6);
     assert.ok(Math.abs(phase[3 * size + 2 + offsetX] - 1.2) < 1e-6);
   }
+});
+
+test("shift line constraint selects the dominant horizontal or vertical axis", () => {
+  assert.deepEqual(
+    constrainPointToAxis({ x: 2, y: 3 }, { x: 11, y: 7, scale: 1 }),
+    { x: 11, y: 3, scale: 1 },
+  );
+  assert.deepEqual(
+    constrainPointToAxis({ x: 2, y: 3 }, { x: 5, y: 14, scale: 1 }),
+    { x: 2, y: 14, scale: 1 },
+  );
+});
+
+test("selection resize locks its original aspect ratio when requested", () => {
+  const original = { left: 2, right: 6, top: 2, bottom: 4 };
+  const free = resizedSelectionBounds(original, "se", { x: 10, y: 10 }, 20, false);
+  assert.deepEqual(free, { left: 2, right: 10, top: 2, bottom: 10 });
+
+  const locked = resizedSelectionBounds(original, "se", { x: 10, y: 10 }, 20, true);
+  assert.equal((locked.right - locked.left) / (locked.bottom - locked.top), 2);
+  assert.deepEqual(locked, { left: 2, right: 18, top: 2, bottom: 10 });
+});
+
+test("scaling a selection resamples complex aperture values and clears its source", () => {
+  const size = 12;
+  const amplitude = new Float32Array(size * size);
+  const phase = new Float32Array(size * size);
+  amplitude[2 * size + 2] = 1;
+  phase[2 * size + 2] = Math.PI / 2;
+  amplitude[10 * size + 10] = 0.4;
+
+  const scaled = scaleApertureSelection({
+    amplitude,
+    phase,
+    size,
+    bounds: { left: 1, right: 3, top: 1, bottom: 3 },
+    targetBounds: { left: 5, right: 9, top: 4, bottom: 8 },
+  });
+
+  assert.equal(scaled.amplitude[2 * size + 2], 0);
+  assert.equal(scaled.amplitude[7 * size + 8], 1);
+  assert.ok(Math.abs(scaled.phase[7 * size + 8] - Math.PI / 2) < 1e-6);
+  assert.ok(Math.abs(scaled.amplitude[10 * size + 10] - 0.4) < 1e-6);
 });
 
 test("filled and outlined polygons rasterize different interiors", () => {
