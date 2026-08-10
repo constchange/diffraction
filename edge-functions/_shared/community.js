@@ -60,6 +60,14 @@ export function jsonResponse(payload, status = 200, extraHeaders = {}) {
 
 export function errorResponse(error) {
   if (error instanceof ApiError) {
+    if (error.code === "CONTENT_REJECTED") {
+      return jsonResponse({
+        error: {
+          code: error.code,
+          message: "内容不符合上传要求，无法上传",
+        },
+      }, error.status);
+    }
     return jsonResponse({
       error: {
         code: error.code,

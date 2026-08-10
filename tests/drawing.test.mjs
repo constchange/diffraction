@@ -8,6 +8,7 @@ import {
   paintStamp,
   paintStampInto,
   pointInShape,
+  repeatApertureSelectionInto,
   repeatDrawingUnitInto,
 } from "../src/core/drawing.js";
 
@@ -133,6 +134,37 @@ test("a drawing unit repeats with an edge-to-edge gap in either direction", () =
     direction: "vertical",
   });
   assert.ok(Math.abs(vertical[15 * size + 6] - 0.7) < 1e-6);
+});
+
+test("a rectangular selection repeats its complete complex aperture data", () => {
+  const size = 12;
+  const amplitude = new Float32Array(size * size);
+  const phase = new Float32Array(size * size);
+  amplitude[2 * size + 2] = 0.25;
+  amplitude[2 * size + 3] = 0.75;
+  amplitude[3 * size + 2] = 1;
+  phase[2 * size + 2] = 0.4;
+  phase[2 * size + 3] = -0.8;
+  phase[3 * size + 2] = 1.2;
+
+  repeatApertureSelectionInto({
+    amplitude,
+    phase,
+    size,
+    bounds: { left: 2, right: 4, top: 2, bottom: 4 },
+    count: 2,
+    spacing: 1,
+    direction: "horizontal",
+  });
+
+  for (const offsetX of [3, 6]) {
+    assert.equal(amplitude[2 * size + 2 + offsetX], 0.25);
+    assert.equal(amplitude[2 * size + 3 + offsetX], 0.75);
+    assert.equal(amplitude[3 * size + 2 + offsetX], 1);
+    assert.ok(Math.abs(phase[2 * size + 2 + offsetX] - 0.4) < 1e-6);
+    assert.ok(Math.abs(phase[2 * size + 3 + offsetX] + 0.8) < 1e-6);
+    assert.ok(Math.abs(phase[3 * size + 2 + offsetX] - 1.2) < 1e-6);
+  }
 });
 
 test("filled and outlined polygons rasterize different interiors", () => {

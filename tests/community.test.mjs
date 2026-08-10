@@ -176,5 +176,7 @@ test("community upload route discards metadata rejected by moderation", async (c
   const payload = await response.json();
   assert.equal(response.status, 422);
   assert.equal(payload.error.code, "CONTENT_REJECTED");
+  assert.equal(payload.error.message, "内容不符合上传要求，无法上传");
+  assert.equal("details" in payload.error, false, "public response must not disclose filtering rules");
   assert.equal(requestCount, 2, "rejected metadata must not reach aperture insert queries");
 });

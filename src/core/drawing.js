@@ -315,6 +315,59 @@ export function repeatDrawingUnitInto({
   return { amplitude, phase };
 }
 
+export function repeatApertureSelectionInto({
+  amplitude,
+  phase,
+  size,
+  bounds,
+  count,
+  spacing,
+  direction,
+}) {
+  if (!bounds) return { amplitude, phase };
+
+  const left = Math.max(0, Math.min(size, Math.floor(bounds.left)));
+  const right = Math.max(0, Math.min(size, Math.ceil(bounds.right)));
+  const top = Math.max(0, Math.min(size, Math.floor(bounds.top)));
+  const bottom = Math.max(0, Math.min(size, Math.ceil(bounds.bottom)));
+  const width = right - left;
+  const height = bottom - top;
+  if (width <= 0 || height <= 0) return { amplitude, phase };
+
+  // Snapshot the complex screen function so overlapping copies cannot change
+  // the source data used by later copies.
+  const sourceAmplitude = new Float32Array(width * height);
+  const sourcePhase = new Float32Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const sourceStart = (top + y) * size + left;
+    sourceAmplitude.set(amplitude.subarray(sourceStart, sourceStart + width), y * width);
+    sourcePhase.set(phase.subarray(sourceStart, sourceStart + width), y * width);
+  }
+
+  const repeatCount = Math.max(0, Math.floor(count));
+  const gap = Math.max(0, Math.round(spacing));
+  const stepX = direction === "horizontal" ? width + gap : 0;
+  const stepY = direction === "vertical" ? height + gap : 0;
+  for (let copy = 1; copy <= repeatCount; copy += 1) {
+    const destinationLeft = left + stepX * copy;
+    const destinationTop = top + stepY * copy;
+    for (let y = 0; y < height; y += 1) {
+      const destinationY = destinationTop + y;
+      if (destinationY < 0 || destinationY >= size) continue;
+      for (let x = 0; x < width; x += 1) {
+        const destinationX = destinationLeft + x;
+        if (destinationX < 0 || destinationX >= size) continue;
+        const sourceIndex = y * width + x;
+        const destinationIndex = destinationY * size + destinationX;
+        amplitude[destinationIndex] = sourceAmplitude[sourceIndex];
+        phase[destinationIndex] = sourcePhase[sourceIndex];
+      }
+    }
+  }
+
+  return { amplitude, phase };
+}
+
 export function moveApertureSelection({ amplitude, phase, size, bounds, offsetX, offsetY }) {
   const dx = Math.round(offsetX);
   const dy = Math.round(offsetY);
