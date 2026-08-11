@@ -70,3 +70,11 @@ export function deleteCommunityAperture(baseUrl, id) {
     method: "DELETE",
   });
 }
+
+export function claimCommunityOnboarding(baseUrl) {
+  return requestJson(`${normalizedBase(baseUrl)}/onboarding`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+}

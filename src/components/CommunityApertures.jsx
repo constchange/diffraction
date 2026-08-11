@@ -20,7 +20,15 @@ import {
 } from "../core/communityApi.js";
 
 const PAGE_SIZE = 18;
-const SLOT_NUMBERS = [1, 2, 3];
+const SLOT_NUMBERS = Array.from({ length: 10 }, (_, index) => index + 1);
+
+function localCommunityPreviewTab() {
+  return typeof window !== "undefined"
+    && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).get("communityTab") === "mine"
+    ? "mine"
+    : "browse";
+}
 
 function formatDate(value) {
   if (!value) return "";
@@ -80,7 +88,7 @@ export function CommunityApertures({
   onLoad,
   onClose,
 }) {
-  const [tab, setTab] = useState("browse");
+  const [tab, setTab] = useState(localCommunityPreviewTab);
   const [publicItems, setPublicItems] = useState([]);
   const [ownedItems, setOwnedItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -231,7 +239,7 @@ export function CommunityApertures({
             <GlobeHemisphereWest size={16} /> 浏览全部 <span>{total}</span>
           </button>
           <button type="button" role="tab" aria-selected={tab === "mine"} className={tab === "mine" ? "active" : ""} onClick={() => setTab("mine")}>
-            <CloudArrowUp size={16} /> 我的三个档位 <span>{ownedItems.length}/3</span>
+            <CloudArrowUp size={16} /> 我的上传
           </button>
         </div>
 
@@ -244,7 +252,7 @@ export function CommunityApertures({
               <button type="button" onClick={() => refreshPublic(page)} disabled={loadingPublic}><ArrowClockwise size={15} className={loadingPublic ? "spinning" : ""} /> 刷新</button>
             </div>
             {publicItems.length === 0 && !loadingPublic ? (
-              <EmptyState>公共空间还是空的，去“我的三个档位”上传第一个作品吧。</EmptyState>
+              <EmptyState>公共空间还是空的，去“我的上传”分享第一个作品吧。</EmptyState>
             ) : (
               <div className={`community-gallery ${loadingPublic ? "loading" : ""}`}>
                 {publicItems.map((item) => (
@@ -268,23 +276,20 @@ export function CommunityApertures({
           </div>
         ) : (
           <div className="community-upload-panel">
-            <div className="community-slot-list" aria-label="当前 IP 的三个公共档位">
-              {SLOT_NUMBERS.map((slot) => {
-                const record = ownedItems.find((item) => item.slot === slot);
-                return (
-                  <button type="button" key={slot} className={selectedSlot === slot ? "active" : ""} onClick={() => chooseSlot(slot)}>
-                    <span>0{slot}</span>
-                    <div><strong>{record?.patternName ?? "空档位"}</strong><small>{record ? `已由 ${record.nickname} 上传` : "可上传当前衍射屏"}</small></div>
-                  </button>
-                );
-              })}
-            </div>
-
             <div className="community-upload-form">
               <div className="community-form-title">
                 <div><strong>上传当前衍射屏</strong><span>第 {selectedSlot} 档</span></div>
                 {selectedRecord && <em>再次上传将覆盖这个档位</em>}
               </div>
+              <label className="community-slot-picker">
+                <span>上传档位</span>
+                <select value={selectedSlot} onChange={(event) => chooseSlot(Number(event.target.value))} aria-label="选择公共上传档位">
+                  {SLOT_NUMBERS.map((slot) => {
+                    const record = ownedItems.find((item) => item.slot === slot);
+                    return <option key={slot} value={slot}>第 {slot} 档 · {record?.patternName ?? "空档位"}</option>;
+                  })}
+                </select>
+              </label>
               <label><span>你的昵称</span><input value={nickname} maxLength="20" placeholder="例如：小光" onChange={(event) => setNickname(event.target.value)} /></label>
               <label><span>衍射屏名称</span><input value={patternName} maxLength="32" placeholder="例如：六边形阵列" onChange={(event) => setPatternName(event.target.value)} /></label>
               <button type="button" className="community-upload-action" onClick={handleUpload} disabled={Boolean(action) || loadingMine}>
@@ -293,7 +298,7 @@ export function CommunityApertures({
             </div>
 
             <div className="community-owned-list">
-              <div className="community-section-heading"><div><strong>已上传作品</strong><span>同一网络地址最多 3 个</span></div></div>
+              <div className="community-section-heading"><div><strong>已上传作品</strong></div></div>
               {ownedItems.length === 0 && !loadingMine ? <EmptyState>你还没有上传公共衍射屏。</EmptyState> : ownedItems.map((item) => (
                 <article key={item.id}>
                   <CommunityPreview preview={item.preview} label={item.patternName} />

@@ -36,7 +36,7 @@ export async function onRequestGet({ request, env }) {
         env,
         `community_apertures?select=${METADATA_COLUMNS}&owner_hash=eq.${ownerHash}&order=slot.asc`,
       );
-      return jsonResponse({ items: (data ?? []).map(mapCommunityMetadata), slotLimit: 3 });
+      return jsonResponse({ items: (data ?? []).map(mapCommunityMetadata) });
     }
 
     const page = parsePositiveInteger(url.searchParams.get("page"), 1, 100_000);

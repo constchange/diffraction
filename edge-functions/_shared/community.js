@@ -297,8 +297,8 @@ export async function parseUploadRequest(request) {
     throw new ApiError(400, "INVALID_JSON", "上传内容不是有效的 JSON");
   }
   const slot = Number(body?.slot);
-  if (!Number.isInteger(slot) || slot < 1 || slot > 3) {
-    throw new ApiError(400, "INVALID_SLOT", "档位只能是 1、2 或 3");
+  if (!Number.isInteger(slot) || slot < 1 || slot > 10) {
+    throw new ApiError(400, "INVALID_SLOT", "上传档位无效");
   }
   return {
     slot,
