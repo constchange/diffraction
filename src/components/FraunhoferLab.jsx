@@ -10,6 +10,7 @@ import { Sparkle } from "@phosphor-icons/react/Sparkle";
 import { WaveSine } from "@phosphor-icons/react/WaveSine";
 import katex from "katex";
 import { createAperture, APERTURE_SIZE, apertureStats } from "../core/aperture.js";
+import { createBrandedPatternDataUrl } from "../core/exportPattern.js";
 import { FORMULA_PRESETS } from "../core/presets.js";
 import { useDiffraction } from "../hooks/useDiffraction.js";
 import { ApertureEditor } from "./ApertureEditor.jsx";
@@ -105,9 +106,9 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
     if (!canvas) return;
     const anchor = document.createElement("a");
     anchor.download = `fraunhofer-${whiteLight ? "white" : `${wavelength}nm`}-${focalLength.toFixed(2)}m.png`;
-    anchor.href = canvas.toDataURL("image/png");
+    anchor.href = createBrandedPatternDataUrl(canvas);
     anchor.click();
-    announce("光屏图样已保存");
+    announce("带启慧研习院标识的光屏图样已保存");
   }
 
   const loadCommunityAperture = useCallback((savedScreen, item) => {
