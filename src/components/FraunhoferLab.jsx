@@ -10,7 +10,11 @@ import { Sparkle } from "@phosphor-icons/react/Sparkle";
 import { WaveSine } from "@phosphor-icons/react/WaveSine";
 import katex from "katex";
 import { createAperture, APERTURE_SIZE, apertureStats } from "../core/aperture.js";
-import { createBrandedPatternDataUrl } from "../core/exportPattern.js";
+import {
+  createBrandedPatternDataUrl,
+  createBrandedPatternDataUrlFromFrame,
+  EXPORT_IMAGE_SIZE,
+} from "../core/exportPattern.js";
 import { FORMULA_PRESETS } from "../core/presets.js";
 import { useDiffraction } from "../hooks/useDiffraction.js";
 import { ApertureEditor } from "./ApertureEditor.jsx";
@@ -65,6 +69,7 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
   const [displayMode, setDisplayMode] = useState("enhanced");
   const [toast, setToast] = useState("");
   const [communityOpen, setCommunityOpen] = useState(false);
+  const [exportingPattern, setExportingPattern] = useState(false);
   const outputCanvasRef = useRef(null);
   const toastTimerRef = useRef(null);
   const renderParams = useMemo(() => ({
@@ -74,7 +79,7 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
     zoom,
     displayMode,
   }), [wavelength, focalLength, whiteLight, zoom, displayMode]);
-  const { frame, status, submitAperture } = useDiffraction(
+  const { frame, status, submitAperture, requestExportFrame } = useDiffraction(
     initialAperture,
     APERTURE_SIZE,
     autoRun,
@@ -101,14 +106,27 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
     announce("实时渲染已暂停，可安心编辑屏函数");
   }, [announce, autoRun]);
 
-  function savePattern() {
+  async function savePattern() {
     const canvas = outputCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || exportingPattern) return;
+    setExportingPattern(true);
     const anchor = document.createElement("a");
     anchor.download = `fraunhofer-${whiteLight ? "white" : `${wavelength}nm`}-${focalLength.toFixed(2)}m.png`;
-    anchor.href = createBrandedPatternDataUrl(canvas);
-    anchor.click();
-    announce("带启慧研习院标识的光屏图样已保存");
+    let exportFrame = null;
+    try {
+      announce("正在生成 1024×1024 高清光屏图样…");
+      exportFrame = await requestExportFrame(EXPORT_IMAGE_SIZE, EXPORT_IMAGE_SIZE);
+      anchor.href = createBrandedPatternDataUrlFromFrame(exportFrame, canvas.ownerDocument);
+      anchor.click();
+      announce("1024×1024 高清光屏图样已保存");
+    } catch {
+      anchor.href = createBrandedPatternDataUrl(canvas);
+      anchor.click();
+      announce("高清计算暂不可用，已保存 1024×1024 放大图样");
+    } finally {
+      exportFrame?.bitmap?.close?.();
+      setExportingPattern(false);
+    }
   }
 
   const loadCommunityAperture = useCallback((savedScreen, item) => {
@@ -244,7 +262,7 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
               {autoRun ? <Pause size={18} weight="fill" /> : <Play size={18} weight="fill" />}
               {autoRun ? "暂停实时计算" : "继续实时计算"}
             </button>
-            <button type="button" className="secondary-action" onClick={savePattern}><Download size={18} /> 保存光屏图样</button>
+            <button type="button" className="secondary-action" onClick={savePattern} disabled={exportingPattern}><Download size={18} /> {exportingPattern ? "正在生成高清图样…" : "保存 1024×1024 光屏图样"}</button>
 
             <div className="inspector-note"><CheckCircle size={15} weight="fill" /><span>绘制与参数变化会自动传播到光屏</span></div>
           </aside>

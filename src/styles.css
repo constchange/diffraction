@@ -1443,6 +1443,11 @@ input[type="range"] {
   border-color: #406597;
 }
 
+.secondary-action:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .inspector-note {
   display: flex;
   align-items: center;

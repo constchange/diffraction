@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const UPDATE_INTERVAL_MS = 100;
 const REFINE_IDLE_MS = 700;
+const EXPORT_TIMEOUT_MS = 20_000;
 export const LIVE_FFT_SIZE = 512;
 export const FINAL_FFT_SIZE = 1024;
 
@@ -27,6 +28,8 @@ export function useDiffraction(initialAperture, size, autoRun, renderParams) {
   const renderedParamsRevisionRef = useRef(0);
   const lastPresentedApertureRevisionRef = useRef(0);
   const frameRef = useRef(null);
+  const exportSequenceRef = useRef(0);
+  const exportRequestsRef = useRef(new Map());
   const [frame, setFrame] = useState(null);
   const [status, setStatus] = useState({
     state: initialAperture ? "computing" : "idle",
@@ -50,6 +53,33 @@ export function useDiffraction(initialAperture, size, autoRun, renderParams) {
     };
     refineDueAtRef.current = performance.now() + REFINE_IDLE_MS;
   }, [size]);
+
+  const requestExportFrame = useCallback((width = 1024, height = 1024) => {
+    const worker = workerRef.current;
+    if (!worker) return Promise.reject(new Error("衍射计算线程尚未准备完成"));
+    const exportId = exportSequenceRef.current + 1;
+    exportSequenceRef.current = exportId;
+    return new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        exportRequestsRef.current.delete(exportId);
+        reject(new Error("生成高清图片超时"));
+      }, EXPORT_TIMEOUT_MS);
+      exportRequestsRef.current.set(exportId, { resolve, reject, timeout });
+      try {
+        worker.postMessage({
+          type: "export",
+          exportId,
+          width,
+          height,
+          renderParams: paramsRef.current,
+        });
+      } catch (error) {
+        window.clearTimeout(timeout);
+        exportRequestsRef.current.delete(exportId);
+        reject(error);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (renderParams !== observedParamsRef.current) {
@@ -150,6 +180,26 @@ export function useDiffraction(initialAperture, size, autoRun, renderParams) {
         payload.bitmap?.close?.();
         return;
       }
+      if (payload.type === "export-frame" || payload.type === "export-error") {
+        const pendingExport = exportRequestsRef.current.get(payload.exportId);
+        if (!pendingExport) {
+          payload.bitmap?.close?.();
+          return;
+        }
+        window.clearTimeout(pendingExport.timeout);
+        exportRequestsRef.current.delete(payload.exportId);
+        if (payload.type === "export-error") {
+          pendingExport.reject(new Error(payload.message));
+        } else {
+          pendingExport.resolve({
+            bitmap: payload.bitmap ?? null,
+            pixels: payload.pixels ?? null,
+            width: payload.width,
+            height: payload.height,
+          });
+        }
+        return;
+      }
       const activeJob = inFlightRef.current;
       if (!activeJob || payload.jobId !== activeJob.jobId) {
         payload.bitmap?.close?.();
@@ -241,6 +291,11 @@ export function useDiffraction(initialAperture, size, autoRun, renderParams) {
       if (dispatchRef.current === dispatchLatest) dispatchRef.current = null;
       if (workerRef.current === worker) workerRef.current = null;
       inFlightRef.current = null;
+      for (const pendingExport of exportRequestsRef.current.values()) {
+        window.clearTimeout(pendingExport.timeout);
+        pendingExport.reject(new Error("衍射计算线程已关闭"));
+      }
+      exportRequestsRef.current.clear();
       worker.terminate();
     };
   }, []);
@@ -250,5 +305,5 @@ export function useDiffraction(initialAperture, size, autoRun, renderParams) {
     if (autoRun) dispatchRef.current?.();
   }, [autoRun]);
 
-  return { frame, status, submitAperture };
+  return { frame, status, submitAperture, requestExportFrame };
 }
