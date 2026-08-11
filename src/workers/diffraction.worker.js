@@ -33,6 +33,29 @@ async function renderCachedFrame(data, fftElapsed = cachedMeta?.fftElapsed ?? 0)
   self.postMessage({ ...common, pixels, width: SCREEN_SIZE, height: SCREEN_SIZE }, [pixels.buffer]);
 }
 
+async function renderExportFrame(data) {
+  if (!cachedField) throw new Error("光场尚未准备完成");
+  const width = Number(data.width);
+  const height = Number(data.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height)
+    || width < 256 || height < 256 || width > 2048 || height > 2048) {
+    throw new Error("导出图片尺寸无效");
+  }
+  const pixels = renderFieldRgba(cachedField, data.renderParams, width, height);
+  const common = {
+    type: "export-frame",
+    exportId: data.exportId,
+    width,
+    height,
+  };
+  if (typeof createImageBitmap === "function" && typeof ImageData === "function") {
+    const bitmap = await createImageBitmap(new ImageData(pixels, width, height));
+    self.postMessage({ ...common, bitmap }, [bitmap]);
+    return;
+  }
+  self.postMessage({ ...common, pixels }, [pixels.buffer]);
+}
+
 async function handleMessage(data) {
   if (data.type === "compute") {
     const startedAt = performance.now();
@@ -47,6 +70,7 @@ async function handleMessage(data) {
     return;
   }
   if (data.type === "render") await renderCachedFrame(data);
+  if (data.type === "export") await renderExportFrame(data);
 }
 
 self.onmessage = (event) => {
@@ -54,6 +78,14 @@ self.onmessage = (event) => {
   workQueue = workQueue
     .then(() => handleMessage(data))
     .catch((error) => {
+      if (data.type === "export") {
+        self.postMessage({
+          type: "export-error",
+          exportId: data.exportId,
+          message: error instanceof Error ? error.message : "导出图片生成失败",
+        });
+        return;
+      }
       self.postMessage({
         type: "error",
         jobId: data.jobId,
