@@ -13,6 +13,7 @@ function createRecordingContext() {
   const calls = [];
   const context = {
     calls,
+    font: "",
     save: () => calls.push(["save"]),
     restore: () => calls.push(["restore"]),
     beginPath: () => calls.push(["beginPath"]),
@@ -60,15 +61,18 @@ test("exported diffraction images copy the rendered screen and embed the academy
   assert.equal(createBrandedPatternDataUrl(sourceCanvas), "data:image/png;base64,preview");
 });
 
-test("the 1024px export watermark is larger, prominent, and inside the lower-right image area", () => {
+test("the 1024px export watermark is frameless Times-style text in the lower-right image area", () => {
   const context = createRecordingContext();
   const bounds = drawExportWatermark(context, EXPORT_IMAGE_SIZE, EXPORT_IMAGE_SIZE);
 
-  assert.ok(bounds.height >= 60 && bounds.height <= 70, "watermark should be clearly larger at 1024px");
-  assert.ok(bounds.x > 700, "watermark should stay away from the central diffraction maximum");
-  assert.ok(bounds.y > 920, "watermark should sit near the lower image edge");
+  assert.equal(EXPORT_WATERMARK, "夫朗禾费衍射仿真 (c)2026, Qi Hui Academy");
+  assert.match(context.font, /italic 600 .*Times New Roman/);
+  assert.ok(bounds.height >= 34 && bounds.height <= 38, "watermark should stay modest at 1024px");
+  assert.ok(bounds.x > 450, "watermark should stay away from the central diffraction maximum");
+  assert.ok(bounds.y > 950, "watermark should sit near the lower image edge");
   assert.ok(bounds.x + bounds.width <= EXPORT_IMAGE_SIZE);
   assert.ok(bounds.y + bounds.height <= EXPORT_IMAGE_SIZE);
+  assert.equal(context.calls.some((call) => ["fill", "stroke", "fillRect"].includes(call[0])), false, "watermark should have no frame or badge");
 });
 
 test("a high-resolution worker frame is exported without falling back to the display canvas", () => {

@@ -16,4 +16,4 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Do not merge the separate pale-blue “引力场” dashboard direction into this simulator. That visual direction is reserved for a different product surface.
 - Keep the scientific canvas genuinely interactive and computation-backed; do not substitute pre-rendered diffraction imagery for the FFT result.
 - Keep community uploads behind same-origin EdgeOne Functions. Never expose the Supabase Secret/Service Role key or raw client IP in frontend code or stored rows.
-- Exported observation-screen PNGs are fixed at 1024×1024 pixels and must embed the clearly visible label “启慧研习院-夫朗禾费衍射仿真” in their pixels, positioned away from the central diffraction pattern. Keep the label modest but larger than the original 440×440 export version.
+- Exported observation-screen PNGs are fixed at 1024×1024 pixels and must embed the exact label “夫朗禾费衍射仿真 (c)2026, Qi Hui Academy” in their pixels, positioned away from the central diffraction pattern. Render it as modest but clearly visible frameless text in an elegant Times-style italic serif font with suitable CJK serif fallbacks.

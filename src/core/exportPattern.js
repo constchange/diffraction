@@ -1,69 +1,30 @@
-export const EXPORT_WATERMARK = "启慧研习院-夫朗禾费衍射仿真";
+export const EXPORT_WATERMARK = "夫朗禾费衍射仿真 (c)2026, Qi Hui Academy";
 export const EXPORT_IMAGE_SIZE = 1024;
-
-function roundedRectanglePath(context, x, y, width, height, radius) {
-  const corner = Math.min(radius, width / 2, height / 2);
-  context.beginPath();
-  context.moveTo(x + corner, y);
-  context.lineTo(x + width - corner, y);
-  context.quadraticCurveTo(x + width, y, x + width, y + corner);
-  context.lineTo(x + width, y + height - corner);
-  context.quadraticCurveTo(x + width, y + height, x + width - corner, y + height);
-  context.lineTo(x + corner, y + height);
-  context.quadraticCurveTo(x, y + height, x, y + height - corner);
-  context.lineTo(x, y + corner);
-  context.quadraticCurveTo(x, y, x + corner, y);
-  context.closePath();
-}
 
 export function drawExportWatermark(context, width, height, label = EXPORT_WATERMARK) {
   const scale = Math.max(0.75, Math.min(width, height) / 440);
   const fontSize = Math.max(11, Math.round(12 * scale));
-  const horizontalPadding = Math.round(10 * scale);
-  const badgeHeight = Math.round(27 * scale);
   const margin = Math.round(12 * scale);
-  const markerWidth = Math.max(2, Math.round(3 * scale));
+  const lineHeight = Math.ceil(fontSize * 1.28);
 
   context.save();
-  context.font = `600 ${fontSize}px "Noto Sans SC", "Microsoft YaHei", sans-serif`;
+  context.font = `italic 600 ${fontSize}px "Times New Roman", "Noto Serif SC", "Songti SC", Georgia, serif`;
   context.textAlign = "left";
-  context.textBaseline = "middle";
+  context.textBaseline = "alphabetic";
 
   const textWidth = context.measureText(label).width;
-  const badgeWidth = Math.ceil(textWidth + horizontalPadding * 2 + markerWidth + 7 * scale);
-  const x = Math.max(margin, width - badgeWidth - margin);
-  const y = Math.max(margin, height - badgeHeight - margin);
+  const x = Math.max(margin, width - textWidth - margin);
+  const baseline = height - margin;
 
-  context.shadowColor = "rgba(83, 105, 255, 0.34)";
-  context.shadowBlur = 10 * scale;
-  context.fillStyle = "rgba(5, 12, 34, 0.84)";
-  roundedRectanglePath(context, x, y, badgeWidth, badgeHeight, 6 * scale);
-  context.fill();
-
-  context.shadowBlur = 0;
-  context.strokeStyle = "rgba(120, 145, 255, 0.72)";
-  context.lineWidth = Math.max(1, scale);
-  context.stroke();
-
-  context.fillStyle = "#7fdcff";
-  context.fillRect(
-    x + horizontalPadding,
-    y + Math.round(7 * scale),
-    markerWidth,
-    badgeHeight - Math.round(14 * scale),
-  );
-
-  context.shadowColor = "rgba(127, 220, 255, 0.45)";
-  context.shadowBlur = 4 * scale;
-  context.fillStyle = "#f4f7ff";
-  context.fillText(
-    label,
-    x + horizontalPadding + markerWidth + 7 * scale,
-    y + badgeHeight / 2,
-  );
+  context.shadowColor = "rgba(0, 0, 0, 0.96)";
+  context.shadowBlur = 5 * scale;
+  context.shadowOffsetX = Math.max(1, Math.round(scale));
+  context.shadowOffsetY = Math.max(1, Math.round(1.5 * scale));
+  context.fillStyle = "#f4ead2";
+  context.fillText(label, x, baseline);
   context.restore();
 
-  return { x, y, width: badgeWidth, height: badgeHeight };
+  return { x, y: baseline - lineHeight, width: Math.ceil(textWidth), height: lineHeight };
 }
 
 function createExportCanvas(documentRef) {
