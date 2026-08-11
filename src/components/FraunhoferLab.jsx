@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Aperture } from "@phosphor-icons/react/Aperture";
 import { BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -16,12 +16,36 @@ import {
   EXPORT_IMAGE_SIZE,
 } from "../core/exportPattern.js";
 import { FORMULA_PRESETS } from "../core/presets.js";
+import { claimCommunityOnboarding } from "../core/communityApi.js";
+import { ONBOARDING_STORAGE_KEY } from "../core/onboarding.js";
 import { useDiffraction } from "../hooks/useDiffraction.js";
 import { ApertureEditor } from "./ApertureEditor.jsx";
 import { DiffractionCanvas } from "./DiffractionCanvas.jsx";
 import { FraunhoferApparatus } from "./FraunhoferApparatus.jsx";
 import { WavelengthBar, wavelengthToRgb } from "./WavelengthBar.jsx";
 import { CommunityApertures } from "./CommunityApertures.jsx";
+import { OnboardingTour } from "./OnboardingTour.jsx";
+
+const onboardingClaims = new Map();
+
+function claimOnboardingOnce(apiBase) {
+  if (!onboardingClaims.has(apiBase)) {
+    onboardingClaims.set(apiBase, claimCommunityOnboarding(apiBase));
+  }
+  return onboardingClaims.get(apiBase);
+}
+
+function localCommunityPreviewOpen() {
+  return typeof window !== "undefined"
+    && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).get("communityPreview") === "1";
+}
+
+function localTourPreviewOpen() {
+  return typeof window !== "undefined"
+    && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).has("tourStep");
+}
 
 function Formula({ children, displayMode = false }) {
   const markup = useMemo(
@@ -68,8 +92,9 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
   const [screenFormula, setScreenFormula] = useState(FORMULA_PRESETS.find((preset) => preset.id === "double-slit").latex);
   const [displayMode, setDisplayMode] = useState("enhanced");
   const [toast, setToast] = useState("");
-  const [communityOpen, setCommunityOpen] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(localCommunityPreviewOpen);
   const [exportingPattern, setExportingPattern] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(localTourPreviewOpen);
   const outputCanvasRef = useRef(null);
   const toastTimerRef = useRef(null);
   const renderParams = useMemo(() => ({
@@ -87,6 +112,34 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
   );
   const [stats, setStats] = useState(() => apertureStats(initialAperture.amplitude));
   const wavelengthColor = wavelengthToRgb(wavelength);
+
+  useEffect(() => {
+    let cancelled = false;
+    let locallySeen = false;
+    try {
+      locallySeen = window.localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1";
+    } catch {
+      locallySeen = false;
+    }
+
+    claimOnboardingOnce(communityApiBase)
+      .then((result) => {
+        if (!cancelled && result.show && !locallySeen) setOnboardingOpen(true);
+      })
+      .catch(() => {
+        if (!cancelled && !locallySeen) setOnboardingOpen(true);
+      });
+    return () => { cancelled = true; };
+  }, [communityApiBase]);
+
+  const closeOnboarding = useCallback(() => {
+    try {
+      window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+    } catch {
+      // The server-side IP claim still prevents the guide from repeating.
+    }
+    setOnboardingOpen(false);
+  }, []);
 
   const commitAperture = useCallback((next) => {
     setCurrentAperture(next);
@@ -262,7 +315,7 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
               {autoRun ? <Pause size={18} weight="fill" /> : <Play size={18} weight="fill" />}
               {autoRun ? "暂停实时计算" : "继续实时计算"}
             </button>
-            <button type="button" className="secondary-action" onClick={savePattern} disabled={exportingPattern}><Download size={18} /> {exportingPattern ? "正在生成高清图样…" : "保存 1024×1024 光屏图样"}</button>
+            <button type="button" className="secondary-action" onClick={savePattern} disabled={exportingPattern} data-tour="export"><Download size={18} /> {exportingPattern ? "正在生成高清图样…" : "保存 1024×1024 光屏图样"}</button>
 
             <div className="inspector-note"><CheckCircle size={15} weight="fill" /><span>绘制与参数变化会自动传播到光屏</span></div>
           </aside>
@@ -280,6 +333,7 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
         onLoad={loadCommunityAperture}
         onClose={() => setCommunityOpen(false)}
       />
+      <OnboardingTour open={onboardingOpen && !communityOpen} onClose={closeOnboarding} />
     </div>
   );
 }

@@ -25,7 +25,7 @@ npm run test:sites
 - `src/workers/`：复屏函数求值与二维 FFT 均在 Web Worker 中执行，避免阻塞界面。
 - `src/embed.jsx`：面向非 React 宿主的挂载入口。
 - `src/components/CommunityApertures.jsx`：公共衍射屏的浏览、上传、覆盖、删除与载入界面。
-- `edge-functions/api/community-apertures/`：EdgeOne 服务端 API，执行 IP 三档限制、审核与 Supabase 读写。
+- `edge-functions/api/community-apertures/`：EdgeOne 服务端 API，执行 IP 上传档位、首次引导、审核与 Supabase 读写。
 - `supabase/community_apertures.sql`：可直接在 Supabase SQL Editor 中执行的数据结构与权限配置。
 
 屏函数坐标约定为 `x,y ∈ [-1,1]`，支持 `rect`、`circ`、`tri`、`sin`、`cos`、`exp`、`sqrt`、`abs`、`atan2` 与复数单位 `i`。屏函数的模会被限制到 `[0,1]`，相位参与衍射计算但不在衍射屏灰度预览中显示。
@@ -52,7 +52,7 @@ npm run test:sites
 ### 启用公共衍射屏
 
 1. 在 Supabase Dashboard 的 SQL Editor 中完整执行 [`supabase/community_apertures.sql`](./supabase/community_apertures.sql)。
-   如果数据库已经执行过 2026-08-10 之前的旧版建表 SQL，只需再执行一次 [`supabase/migrate_screen_modes.sql`](./supabase/migrate_screen_modes.sql)，即可允许公共空间保存屏函数文本。
+   如果数据库已执行过旧版建表 SQL，请执行 [`supabase/migrate_screen_modes.sql`](./supabase/migrate_screen_modes.sql) 以允许保存屏函数文本，再执行 [`supabase/migrate_ten_slots_and_onboarding.sql`](./supabase/migrate_ten_slots_and_onboarding.sql) 升级上传档位并启用按 IP 的首次访问引导。
 2. 在 EdgeOne 项目环境变量中配置：
 
 ```text
@@ -62,7 +62,7 @@ SUPABASE_SECRET_KEY=sb_secret_...
 
 也兼容把第二项命名为 `SUPABASE_KEY`，以及旧版 JWT 格式的 `service_role` Key。必须使用 Secret/Service Role Key，不能使用 `anon` 或 Publishable Key；密钥只由 `edge-functions` 读取，不会进入 Vite 前端产物。
 
-公共空间使用 `request.eo.clientIp` 获取 EdgeOne 提供的真实客户端 IP，再由 Supabase 中一次性生成的私有盐计算 HMAC-SHA-256 摘要。数据库不保存原始 IP，轮换 API Key 也不会改变档位归属；唯一约束保证每个 IP 摘要只有 1–3 三个档位。公共列表分页且只返回 48×48 预览，点击载入时才按存档类型获取完整复振幅数据或 LaTeX 屏函数文本。
+公共空间使用 `request.eo.clientIp` 获取 EdgeOne 提供的真实客户端 IP，再由 Supabase 中一次性生成的私有盐计算 HMAC-SHA-256 摘要。数据库不保存原始 IP，轮换 API Key 也不会改变档位归属；唯一约束保证每个 IP 摘要拥有独立的十个上传档位。首次访问引导也只登记这份摘要，不保存原始 IP。公共列表分页且只返回 48×48 预览，点击载入时才按存档类型获取完整复振幅数据或 LaTeX 屏函数文本。
 
 基础审核覆盖昵称/名称敏感词与已知违规图样哈希。词库可在 `community_blocked_terms` 表继续维护；把已确认违规图样的 `pattern_hash` 写入 `community_blocked_pattern_hashes` 后，数据库触发器会清除已有同哈希作品，服务端也会拒绝后续上传。该本地规则方案不能替代专业语义内容审核服务。
 

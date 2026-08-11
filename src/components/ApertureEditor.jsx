@@ -1177,7 +1177,7 @@ export const ApertureEditor = memo(function ApertureEditor({
           <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "active" : ""} onClick={() => changeEditorMode("draw")}>
             <PencilSimple size={16} weight="duotone" /> 绘制模式
           </button>
-          <button type="button" role="tab" aria-selected={mode === "function"} className={mode === "function" ? "active" : ""} onClick={() => changeEditorMode("function")}>
+          <button type="button" role="tab" aria-selected={mode === "function"} className={mode === "function" ? "active" : ""} onClick={() => changeEditorMode("function")} data-tour="function-mode">
             <FunctionIcon size={16} weight="bold" /> 屏函数模式
           </button>
         </div>
@@ -1192,6 +1192,7 @@ export const ApertureEditor = memo(function ApertureEditor({
                 type="button"
                 className={`${tool === id ? "active" : ""} ${id === "select" ? "selection-tool" : ""}`}
                 onClick={() => chooseTool(id)}
+                data-tour={id === "brush" ? "draw-tool" : id === "select" ? "selection-tool" : undefined}
                 aria-label={label}
                 title={label}
               >
@@ -1205,6 +1206,7 @@ export const ApertureEditor = memo(function ApertureEditor({
               title="周期性重复当前选区"
               aria-label="周期性重复当前选区"
               aria-expanded={repeatPanelOpen}
+              data-tour="repeat-unit"
             >
               <Repeat size={17} /><span>重复单元</span>
             </button>
@@ -1370,9 +1372,9 @@ export const ApertureEditor = memo(function ApertureEditor({
               <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
             </button>
             <button type="button" onClick={clearAperture} title="清空衍射屏全部内容"><Trash size={17} /><span>清空画布</span></button>
-            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共衍射屏"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
+            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共衍射屏" data-tour="community"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
             <details className="local-save-menu">
-              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
+              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏" data-tour="local-save"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
               <div className="local-save-panel">
                 <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
                 <select value={selectedSaveId} onChange={(event) => setSelectedSaveId(event.target.value)} aria-label="选择本地衍射屏存档">
@@ -1414,9 +1416,9 @@ export const ApertureEditor = memo(function ApertureEditor({
           <div className="formula-preview" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
           <p className={`formula-status ${formulaState.state}`}>{formulaState.message}</p>
           <div className="canvas-actions utility-actions formula-utility-actions">
-            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共屏函数"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
+            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共屏函数" data-tour="community"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
             <details className="local-save-menu">
-              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
+              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏" data-tour="local-save"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
               <div className="local-save-panel">
                 <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
                 <select value={selectedSaveId} onChange={(event) => setSelectedSaveId(event.target.value)} aria-label="选择本地衍射屏存档">

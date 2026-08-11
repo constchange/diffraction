@@ -9,7 +9,8 @@ import {
   validateApertureData,
 } from "../edge-functions/_shared/community.js";
 import { encodeAperture, encodeScreenDefinition } from "../src/core/apertureStorage.js";
-import { onRequestPost } from "../edge-functions/api/community-apertures/index.js";
+import { onRequestPost as onUploadPost } from "../edge-functions/api/community-apertures/index.js";
+import { onRequestPost as onOnboardingPost } from "../edge-functions/api/community-apertures/onboarding.js";
 
 function sampleEncodedAperture(size = 256) {
   const amplitude = new Float32Array(size * size);
@@ -72,20 +73,39 @@ test("local moderation normalizes punctuation and rejects matching metadata", ()
   );
 });
 
-test("upload metadata accepts exactly three slots and bounded labels", async () => {
+test("upload metadata accepts the tenth slot and bounded labels", async () => {
   const request = new Request("https://example.test/api/community-apertures", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      slot: 3,
+      slot: 10,
       nickname: "  小光  ",
       patternName: "双孔实验",
       aperture: sampleEncodedAperture(),
     }),
   });
   const parsed = await parseUploadRequest(request);
-  assert.equal(parsed.slot, 3);
+  assert.equal(parsed.slot, 10);
   assert.equal(parsed.nickname, "小光");
+});
+
+test("upload metadata rejects an unavailable slot without advertising capacity", async () => {
+  const request = new Request("https://example.test/api/community-apertures", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      slot: 11,
+      nickname: "小光",
+      patternName: "双孔实验",
+      aperture: sampleEncodedAperture(),
+    }),
+  });
+  await assert.rejects(
+    parseUploadRequest(request),
+    (error) => error instanceof ApiError
+      && error.code === "INVALID_SLOT"
+      && !error.message.includes("10"),
+  );
 });
 
 test("owner identity is a salted digest and never exposes the client IP", async () => {
@@ -152,7 +172,7 @@ test("community upload route moderates and inserts through a server-only Supabas
     }),
   });
   Object.defineProperty(request, "eo", { value: { clientIp: "203.0.113.9" } });
-  const response = await onRequestPost({
+  const response = await onUploadPost({
     request,
     env: {
       SUPABASE_URL: "https://sample.supabase.co",
@@ -187,7 +207,7 @@ test("community upload route discards metadata rejected by moderation", async (c
     }),
   });
   Object.defineProperty(request, "eo", { value: { clientIp: "203.0.113.10" } });
-  const response = await onRequestPost({
+  const response = await onUploadPost({
     request,
     env: {
       SUPABASE_URL: "https://sample.supabase.co",
@@ -200,4 +220,46 @@ test("community upload route discards metadata rejected by moderation", async (c
   assert.equal(payload.error.message, "内容不符合上传要求，无法上传");
   assert.equal("details" in payload.error, false, "public response must not disclose filtering rules");
   assert.equal(requestCount, 2, "rejected metadata must not reach aperture insert queries");
+});
+
+test("onboarding claim shows only for the first visit and stores no raw IP", async (context) => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  context.after(() => { globalThis.fetch = originalFetch; });
+  let inserted = false;
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), options });
+    if (String(url).includes("rpc/community_owner_hash")) return Response.json("d".repeat(64));
+    if (String(url).includes("community_onboarding_visits")) {
+      if (inserted) return Response.json([]);
+      inserted = true;
+      return Response.json([{ owner_hash: "d".repeat(64) }], { status: 201 });
+    }
+    throw new Error(`unexpected request: ${url}`);
+  };
+
+  async function claim() {
+    const request = new Request("https://example.test/api/community-apertures/onboarding", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://example.test" },
+      body: "{}",
+    });
+    Object.defineProperty(request, "eo", { value: { clientIp: "203.0.113.77" } });
+    const response = await onOnboardingPost({
+      request,
+      env: {
+        SUPABASE_URL: "https://sample.supabase.co",
+        SUPABASE_SECRET_KEY: "sb_secret_test_value",
+      },
+    });
+    return response.json();
+  }
+
+  assert.deepEqual(await claim(), { show: true });
+  assert.deepEqual(await claim(), { show: false });
+  const onboardingCalls = requests.filter((item) => item.url.includes("community_onboarding_visits"));
+  assert.equal(onboardingCalls.length, 2);
+  assert.match(onboardingCalls[0].options.headers.prefer, /ignore-duplicates/);
+  assert.equal(onboardingCalls.some((item) => item.url.includes("203.0.113.77")), false);
+  assert.equal(onboardingCalls.some((item) => String(item.options.body).includes("203.0.113.77")), false);
 });
