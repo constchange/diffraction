@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createSpatialFilter,
   createSpatialObject,
+  renderSpatialField,
   spatialFilterField,
 } from "../src/core/spatialFilter.js";
 import { fft2dField } from "../src/core/fft.js";
@@ -65,6 +66,31 @@ test("a high-pass filter suppresses a uniform object's central field", () => {
     }
   }
   assert.ok(centralSum / centralCount < totalSum / intensity.length);
+});
+
+test("blocking only the visible Fourier window preserves outside high frequencies", () => {
+  const size = 64;
+  const object = createSpatialObject(size, "edges");
+  const visibleWindowBlocked = createSpatialFilter(size, "blocked");
+  const result = spatialFilterField(object, visibleWindowBlocked, size, 128, 1);
+  const totalIntensity = imageIntensity(result.image).reduce((sum, value) => sum + value, 0);
+  assert.ok(totalIntensity > 1e-8);
+});
+
+test("blocking the entire Fourier plane produces an exactly dark image", () => {
+  const size = 64;
+  const object = createSpatialObject(size, "edges");
+  const visibleWindowBlocked = createSpatialFilter(size, "blocked");
+  const result = spatialFilterField(object, visibleWindowBlocked, size, 128, 0);
+  assert.ok(result.image.real.every((value) => value === 0));
+  assert.ok(result.image.imag.every((value) => value === 0));
+  const pixels = renderSpatialField(result.image);
+  for (let index = 0; index < pixels.length; index += 4) {
+    assert.equal(pixels[index], 0);
+    assert.equal(pixels[index + 1], 0);
+    assert.equal(pixels[index + 2], 0);
+    assert.equal(pixels[index + 3], 255);
+  }
 });
 
 test("spatial filter presets produce bounded complex transmittance", () => {

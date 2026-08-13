@@ -53,7 +53,7 @@ function fft2dInPlace(real, imag, size, inverse = false) {
   }
 }
 
-function sampleFilterComplex(filterField, filterSize, fftSize, fftX, fftY) {
+function sampleFilterComplex(filterField, filterSize, fftSize, fftX, fftY, outsideTransmission = 1) {
   // The editable filter covers the same central frequency window shown by the
   // Fraunhofer observation screen at its default scale. Mapping the mask back
   // to the padded FFT keeps drawing coordinates and displayed frequencies in
@@ -65,7 +65,7 @@ function sampleFilterComplex(filterField, filterSize, fftSize, fftX, fftY) {
     // The drawn mask represents only the visible central frequency window.
     // Frequencies outside that window retain their transmission instead of
     // inheriting an arbitrarily clamped edge pixel.
-    return { real: 1, imag: 0 };
+    return { real: Math.max(0, Math.min(1, outsideTransmission)), imag: 0 };
   }
   const x0 = Math.max(0, Math.min(filterSize - 1, Math.floor(maskX)));
   const y0 = Math.max(0, Math.min(filterSize - 1, Math.floor(maskY)));
@@ -177,6 +177,7 @@ export function spatialFilterField(
   filterField,
   size = SPATIAL_FILTER_SIZE,
   fftSize = SPATIAL_FFT_SIZE,
+  outsideTransmission = 1,
 ) {
   assertField(objectField, size, "物面");
   assertField(filterField, size, "滤波器");
@@ -210,7 +211,7 @@ export function spatialFilterField(
       const index = y * fftSize + x;
       const spectrumIntensity = spectrumReal[index] ** 2 + spectrumImag[index] ** 2;
       if (spectrumIntensity > maximumSpectrumIntensity) maximumSpectrumIntensity = spectrumIntensity;
-      const filter = sampleFilterComplex(filterField, size, fftSize, x, y);
+      const filter = sampleFilterComplex(filterField, size, fftSize, x, y, outsideTransmission);
       filteredReal[index] = spectrumReal[index] * filter.real - spectrumImag[index] * filter.imag;
       filteredImag[index] = spectrumReal[index] * filter.imag + spectrumImag[index] * filter.real;
     }

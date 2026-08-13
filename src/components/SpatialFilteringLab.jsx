@@ -62,6 +62,7 @@ export function SpatialFilteringLab() {
   const [abbeOrder, setAbbeOrder] = useState(1);
   const [activePanel, setActivePanel] = useState("filter");
   const [showSpectrumBackdrop, setShowSpectrumBackdrop] = useState(true);
+  const [outsideTransmission, setOutsideTransmission] = useState(1);
   const imageCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const { frame, status, submit } = useSpatialFilter(
@@ -71,10 +72,11 @@ export function SpatialFilteringLab() {
   );
   const latestObjectRef = useRef(initialObjectRef.current);
   const latestFilterRef = useRef(initialFilterRef.current);
+  const latestOutsideTransmissionRef = useRef(1);
 
   useEffect(() => {
-    submit(objectField, filterField);
-  }, [filterField, objectField, submit]);
+    submit(objectField, filterField, outsideTransmission);
+  }, [filterField, objectField, outsideTransmission, submit]);
 
   const filterOptions = useMemo(() => ({
     radius: filterRadius,
@@ -99,6 +101,8 @@ export function SpatialFilteringLab() {
   const applyFilterPreset = useCallback((kind, nextOptions = filterOptions) => {
     const next = createSpatialFilter(SPATIAL_FILTER_SIZE, kind, nextOptions);
     latestFilterRef.current = next;
+    latestOutsideTransmissionRef.current = 1;
+    setOutsideTransmission(1);
     setFilterPreset(kind);
     setFilterField(next);
   }, [filterOptions]);
@@ -119,19 +123,32 @@ export function SpatialFilteringLab() {
 
   const previewObjectField = useCallback((next) => {
     latestObjectRef.current = next;
-    submit(next, latestFilterRef.current);
+    submit(next, latestFilterRef.current, latestOutsideTransmissionRef.current);
   }, [submit]);
 
-  const updateFilterField = useCallback((next) => {
+  const updateFilterField = useCallback((next, detail) => {
     latestFilterRef.current = next;
+    if (detail?.action === "clear") {
+      latestOutsideTransmissionRef.current = 1;
+      setOutsideTransmission(1);
+    }
     setFilterPreset("custom");
     setFilterField(next);
   }, []);
 
   const previewFilterField = useCallback((next) => {
     latestFilterRef.current = next;
-    submit(latestObjectRef.current, next);
+    submit(latestObjectRef.current, next, latestOutsideTransmissionRef.current);
   }, [submit]);
+
+  const blockEntireSpectrum = useCallback(() => {
+    const next = createSpatialFilter(SPATIAL_FILTER_SIZE, "blocked");
+    latestFilterRef.current = next;
+    latestOutsideTransmissionRef.current = 0;
+    setFilterPreset("blocked-all");
+    setOutsideTransmission(0);
+    setFilterField(next);
+  }, []);
 
   const objectPresets = (
     <div className="spatial-editor-presets object-preset-row">
@@ -243,8 +260,8 @@ export function SpatialFilteringLab() {
             showRepeat={false}
             showCommunity={false}
             showLocalStorage={false}
-            clearLabel="全不通"
-            clearTitle="将频谱面设为完全不透光"
+            clearLabel="频谱面如下显示部分全不通"
+            clearTitle="仅将频谱面当前显示和可绘制的区域设为完全不透光，外部高频仍可通过"
             showPhase
             canvasClassName={showSpectrumBackdrop ? "aperture-filter-mask" : ""}
             canvasUnderlay={showSpectrumBackdrop
@@ -259,6 +276,16 @@ export function SpatialFilteringLab() {
                 <button type="button" onClick={() => applyFilterPreset("open")}><Aperture size={14} /> 全通</button>
               </div>
             )}
+            utilityControls={(
+              <button
+                type="button"
+                className={outsideTransmission === 0 ? "full-spectrum-block active" : "full-spectrum-block"}
+                onClick={blockEntireSpectrum}
+                title="阻断整个 FFT 频谱，像面应完全无光"
+              >
+                <Funnel size={17} /><span>频谱面全部不通</span>
+              </button>
+            )}
           />
         </article>
 
@@ -270,7 +297,7 @@ export function SpatialFilteringLab() {
             <SpatialFieldCanvas ref={imageCanvasRef} bitmap={frame?.image} pixels={frame?.imagePixels} sourceSize={frame?.size} label="空间滤波后的像面强度" />
           </div>
           <footer className="spatial-module-controls image-controls">
-            <div><ImageSquare size={17} /><span>像面强度</span><strong>{FILTER_PRESETS.find((item) => item.id === filterPreset)?.name ?? "自由滤波"}</strong></div>
+            <div><ImageSquare size={17} /><span>像面强度</span><strong>{filterPreset === "blocked-all" ? "全部不通" : FILTER_PRESETS.find((item) => item.id === filterPreset)?.name ?? "自由滤波"}</strong></div>
             <button type="button" onClick={exportImage}><Download size={15} /> 导出像面</button>
           </footer>
         </article>

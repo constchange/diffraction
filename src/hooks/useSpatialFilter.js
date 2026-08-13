@@ -2,19 +2,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const UPDATE_INTERVAL_MS = 110;
 
-export function useSpatialFilter(initialObject, initialFilter, size) {
+export function useSpatialFilter(initialObject, initialFilter, size, initialOutsideTransmission = 1) {
   const workerRef = useRef(null);
-  const latestRef = useRef({ object: initialObject, filter: initialFilter, revision: 1 });
+  const latestRef = useRef({
+    object: initialObject,
+    filter: initialFilter,
+    outsideTransmission: initialOutsideTransmission,
+    revision: 1,
+  });
   const sentRevisionRef = useRef(0);
   const inFlightRef = useRef(false);
   const frameRef = useRef(null);
   const [frame, setFrame] = useState(null);
   const [status, setStatus] = useState({ state: "computing", elapsed: 0, message: "" });
 
-  const submit = useCallback((object, filter) => {
+  const submit = useCallback((object, filter, outsideTransmission = 1) => {
     latestRef.current = {
       object,
       filter,
+      outsideTransmission,
       revision: latestRef.current.revision + 1,
     };
   }, []);
@@ -42,6 +48,7 @@ export function useSpatialFilter(initialObject, initialFilter, size) {
         objectPhase,
         filterAmplitude,
         filterPhase,
+        outsideTransmission: latest.outsideTransmission,
       }, [objectAmplitude.buffer, objectPhase.buffer, filterAmplitude.buffer, filterPhase.buffer]);
     }
 

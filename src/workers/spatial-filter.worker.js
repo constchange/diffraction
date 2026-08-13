@@ -7,7 +7,13 @@ async function sendFrame(data) {
   const startedAt = performance.now();
   const objectField = { amplitude: data.objectAmplitude, phase: data.objectPhase };
   const filterField = { amplitude: data.filterAmplitude, phase: data.filterPhase };
-  const result = spatialFilterField(objectField, filterField, data.size);
+  const result = spatialFilterField(
+    objectField,
+    filterField,
+    data.size,
+    undefined,
+    data.outsideTransmission,
+  );
   const spectrumPixels = renderFieldRgba(result.spectrum, {
     wavelength: 532,
     focalLength: 1.2,

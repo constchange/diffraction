@@ -93,6 +93,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   clearLabel = "清空画布",
   clearTitle = "清空衍射屏全部内容",
   supplementalControls = null,
+  utilityControls = null,
   canvasUnderlay = null,
   canvasClassName = "",
   showPhase = false,
@@ -588,7 +589,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     apertureRef.current = next;
     strokeApertureRef.current = null;
     renderAmplitude(next.amplitude);
-    onChange(next, { quality: "final" });
+    onChange(next, { quality: "final", action: "clear" });
     polygonVerticesRef.current = [];
     polygonCursorRef.current = null;
     drawingBaseRef.current = null;
@@ -1404,6 +1405,7 @@ export const ApertureEditor = memo(function ApertureEditor({
               <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
             </button>
             <button type="button" onClick={clearAperture} title={clearTitle}><Trash size={17} /><span>{clearLabel}</span></button>
+            {utilityControls}
             {showCommunity && onOpenCommunity && <button type="button" onClick={onOpenCommunity} title="浏览或上传公共衍射屏" data-tour="community"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>}
             {showLocalStorage && <details className="local-save-menu">
               <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏" data-tour="local-save"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>

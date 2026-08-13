@@ -666,6 +666,18 @@ body {
   min-height: 116px;
 }
 
+.spectrum-module .utility-actions > button {
+  height: auto;
+  min-height: 31px;
+  line-height: 1.25;
+}
+
+.spectrum-module .utility-actions > .full-spectrum-block.active {
+  color: #f2f7ff;
+  border-color: #4c8fff;
+  background: #1b4e9d;
+}
+
 @media (max-width: 600px) {
   .spatial-editor-module > .aperture-module {
     grid-template-rows: 58px 410px auto;
