@@ -10,7 +10,9 @@ import { ImageSquare } from "@phosphor-icons/react/ImageSquare";
 import { Rectangle } from "@phosphor-icons/react/Rectangle";
 import { Scan } from "@phosphor-icons/react/Scan";
 import { SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
+import symmetricObjectUrl from "../assets/symmetric-object.jpeg";
 import { createBrandedPatternCanvas } from "../core/exportPattern.js";
+import { imageDataToAmplitudeField } from "../core/imageField.js";
 import {
   createSpatialFilter,
   createSpatialObject,
@@ -25,6 +27,7 @@ const OBJECT_PRESETS = [
   { id: "grid", name: "方格光栅" },
   { id: "rings", name: "同心环" },
   { id: "edges", name: "菱形边框" },
+  { id: "symmetric-object", name: "某对称体", imageUrl: symmetricObjectUrl },
 ];
 
 const FILTER_PRESETS = [
@@ -79,7 +82,14 @@ export function SpatialFilteringLab() {
     abbeOrder,
   }), [abbeOrder, filterRadius, slitWidth]);
 
-  const applyObjectPreset = useCallback((kind) => {
+  const applyObjectPreset = useCallback(async (kind, imageUrl) => {
+    if (imageUrl) {
+      const next = await loadImageField(imageUrl);
+      latestObjectRef.current = next;
+      setObjectPreset(kind);
+      setObjectField(next);
+      return;
+    }
     const next = createSpatialObject(SPATIAL_FILTER_SIZE, kind);
     latestObjectRef.current = next;
     setObjectPreset(kind);
@@ -126,7 +136,7 @@ export function SpatialFilteringLab() {
   const objectPresets = (
     <div className="spatial-editor-presets object-preset-row">
       {OBJECT_PRESETS.map((preset) => (
-        <button key={preset.id} type="button" className={objectPreset === preset.id ? "active" : ""} onClick={() => applyObjectPreset(preset.id)}>{preset.name}</button>
+        <button key={preset.id} type="button" className={objectPreset === preset.id ? "active" : ""} onClick={() => applyObjectPreset(preset.id, preset.imageUrl)}>{preset.name}</button>
       ))}
       <button type="button" onClick={() => fileInputRef.current?.click()}>上传图片</button>
       <input ref={fileInputRef} type="file" accept="image/*" onChange={loadImage} hidden />
@@ -136,7 +146,15 @@ export function SpatialFilteringLab() {
   async function loadImage(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const bitmap = await createImageBitmap(file);
+    const next = await loadImageField(file);
+    setObjectPreset("custom");
+    latestObjectRef.current = next;
+    setObjectField(next);
+    event.target.value = "";
+  }
+
+  async function loadImageField(source) {
+    const bitmap = await createImageBitmap(source instanceof Blob ? source : await fetch(source).then((response) => response.blob()));
     const buffer = document.createElement("canvas");
     buffer.width = SPATIAL_FILTER_SIZE;
     buffer.height = SPATIAL_FILTER_SIZE;
@@ -149,15 +167,7 @@ export function SpatialFilteringLab() {
     context.drawImage(bitmap, (buffer.width - width) / 2, (buffer.height - height) / 2, width, height);
     bitmap.close?.();
     const image = context.getImageData(0, 0, buffer.width, buffer.height);
-    const next = { amplitude: new Float32Array(SPATIAL_FILTER_SIZE ** 2), phase: new Float32Array(SPATIAL_FILTER_SIZE ** 2) };
-    for (let index = 0; index < next.amplitude.length; index += 1) {
-      const offset = index * 4;
-      next.amplitude[index] = (image.data[offset] * 0.2126 + image.data[offset + 1] * 0.7152 + image.data[offset + 2] * 0.0722) / 255;
-    }
-    setObjectPreset("custom");
-    latestObjectRef.current = next;
-    setObjectField(next);
-    event.target.value = "";
+    return imageDataToAmplitudeField(image, SPATIAL_FILTER_SIZE);
   }
 
   function exportImage() {

@@ -6,10 +6,30 @@ import {
   spatialFilterField,
 } from "../src/core/spatialFilter.js";
 import { fft2dField } from "../src/core/fft.js";
+import { imageDataToAmplitudeField } from "../src/core/imageField.js";
 
 function imageIntensity(field) {
   return field.real.map((value, index) => value ** 2 + field.imag[index] ** 2);
 }
+
+test("an image preset becomes a bounded grayscale amplitude field", () => {
+  const image = {
+    width: 2,
+    height: 2,
+    data: new Uint8ClampedArray([
+      0, 0, 0, 255,
+      255, 255, 255, 255,
+      255, 0, 0, 255,
+      0, 255, 0, 255,
+    ]),
+  };
+  const field = imageDataToAmplitudeField(image, 2);
+  assert.deepEqual(Array.from(field.phase), [0, 0, 0, 0]);
+  assert.equal(field.amplitude[0], 0);
+  assert.equal(field.amplitude[1], 1);
+  assert.ok(field.amplitude[2] > 0.21 && field.amplitude[2] < 0.22);
+  assert.ok(field.amplitude[3] > 0.71 && field.amplitude[3] < 0.72);
+});
 
 test("an open 4f filter reconstructs the input complex field", () => {
   const size = 32;
