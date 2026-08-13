@@ -43,14 +43,14 @@ function prepareExportContext(exportCanvas) {
   return context;
 }
 
-export function createBrandedPatternCanvas(sourceCanvas) {
+export function createBrandedPatternCanvas(sourceCanvas, label = EXPORT_WATERMARK) {
   if (!sourceCanvas) throw new TypeError("A source canvas is required");
   const documentRef = sourceCanvas.ownerDocument ?? globalThis.document;
   const exportCanvas = createExportCanvas(documentRef);
   const context = prepareExportContext(exportCanvas);
 
   context.drawImage(sourceCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
-  drawExportWatermark(context, exportCanvas.width, exportCanvas.height);
+  drawExportWatermark(context, exportCanvas.width, exportCanvas.height, label);
   return exportCanvas;
 }
 

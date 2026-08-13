@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { FraunhoferLab } from "./components/FraunhoferLab.jsx";
+import { ExperimentWorkspace } from "./components/ExperimentWorkspace.jsx";
 import labStyles from "./styles.css?inline";
 import katexStyles from "katex/dist/katex.min.css?inline";
 
@@ -40,8 +41,30 @@ export function mountFraunhoferLab(element, options = {}) {
   };
 }
 
-export { FraunhoferLab };
+export function mountOpticsWorkspace(element, options = {}) {
+  if (!(element instanceof Element)) {
+    throw new TypeError("mountOpticsWorkspace 需要一个有效的 DOM Element");
+  }
+  ensureStyles();
+  mountedRoots.get(element)?.unmount();
+  const root = createRoot(element);
+  const workspace = (
+    <ExperimentWorkspace
+      compact={Boolean(options.compact)}
+      communityApiBase={options.communityApiBase || "/api/community-apertures"}
+      initialExperiment={options.initialExperiment || "fraunhofer"}
+    />
+  );
+  root.render(options.strict ? <React.StrictMode>{workspace}</React.StrictMode> : workspace);
+  mountedRoots.set(element, root);
+  return () => {
+    root.unmount();
+    mountedRoots.delete(element);
+  };
+}
+
+export { ExperimentWorkspace, FraunhoferLab };
 
 if (typeof window !== "undefined") {
-  window.FraunhoferLabEmbed = { mountFraunhoferLab };
+  window.FraunhoferLabEmbed = { mountFraunhoferLab, mountOpticsWorkspace };
 }

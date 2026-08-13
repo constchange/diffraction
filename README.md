@@ -1,6 +1,6 @@
-# 启慧研习院 · 夫朗禾费衍射仿真
+# 启慧研习院 · 波动光学实验室
 
-一个可绘制复振幅屏函数的夫朗禾费衍射实验。衍射图样由浏览器内的二维 FFT 实时计算；可选的公共衍射屏空间由 EdgeOne Functions 与 Supabase 提供。
+一个包含夫朗禾费衍射与 4f 空间滤波的交互式波动光学实验网页。两个实验都由浏览器内的二维 FFT 实时计算；第三个菲涅尔衍射实验已预留为后续同级标签。
 
 ## 本地开发
 
@@ -19,7 +19,10 @@ npm run test:sites
 
 ## 功能结构
 
+- `src/components/ExperimentWorkspace.jsx`：实验标签页外壳，切换时保留夫朗禾费实验状态。
 - `src/components/FraunhoferLab.jsx`：独立实验组件，可被更大 React 应用直接导入。
+- `src/components/SpatialFilteringLab.jsx`：物面、频谱/滤波面、像面组成的 4f 空间滤波实验。
+- `src/core/spatialFilter.js`：复振幅物场、复滤波函数、正逆二维 FFT 与强度渲染。
 - `src/components/ApertureEditor.jsx`：画笔、橡皮、圆/方/长方/六边形/三角形与透光率编辑。
 - `src/core/formula.js`：LaTeX 屏函数转换、复数求值与内置屏函数预设。
 - `src/workers/`：复屏函数求值与二维 FFT 均在 Web Worker 中执行，避免阻塞界面。
@@ -82,5 +85,17 @@ SUPABASE_SECRET_KEY=sb_secret_...
 ```
 
 也可以用普通模块标签加载后，从 `window.FraunhoferLabEmbed.mountFraunhoferLab(...)` 调用；这为不方便使用命名导入的宿主保留了稳定入口。
+
+如果希望嵌入包含两个实验标签的完整工作区，改用 `mountOpticsWorkspace(...)`：
+
+```html
+<script type="module">
+  import { mountOpticsWorkspace } from "/path/to/embed.js";
+  mountOpticsWorkspace(document.querySelector("#diffraction-lab"), {
+    initialExperiment: "spatial-filter",
+    communityApiBase: "/api/community-apertures",
+  });
+</script>
+```
 
 入口会自动注入一次作用域化界面样式和 KaTeX 样式；返回值负责清理 React 根节点。Web Worker 和图片资源由构建器以相对模块 URL 引用，适合与宿主程序分开发布。

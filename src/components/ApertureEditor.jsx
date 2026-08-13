@@ -67,6 +67,7 @@ const TOOLS = [
   { id: "resize", label: "缩放选区", Icon: Resize },
   { id: "eraser", label: "橡皮", Icon: Eraser },
 ];
+let activeDrawingEditorId = null;
 
 export const ApertureEditor = memo(function ApertureEditor({
   aperture,
@@ -80,6 +81,22 @@ export const ApertureEditor = memo(function ApertureEditor({
   onFunctionEditStart,
   onOpenCommunity,
   isRenderingPaused = false,
+  title = "衍射屏",
+  subtitle = "复振幅屏函数 T(x, y)",
+  editorId = "aperture-title",
+  index = "01",
+  showModeTabs = true,
+  allowedTools = null,
+  showRepeat = true,
+  showCommunity = true,
+  showLocalStorage = true,
+  clearLabel = "清空画布",
+  clearTitle = "清空衍射屏全部内容",
+  supplementalControls = null,
+  canvasUnderlay = null,
+  canvasClassName = "",
+  showPhase = false,
+  canvasAriaLabel = "衍射屏透光率绘制区域，黑色不透光，白色完全透光",
 }) {
   const canvasRef = useRef(null);
   const apertureRef = useRef(aperture);
@@ -135,6 +152,9 @@ export const ApertureEditor = memo(function ApertureEditor({
   });
   const [selectedSaveId, setSelectedSaveId] = useState("");
   const [storageMessage, setStorageMessage] = useState("可保存当前屏函数");
+  const visibleTools = allowedTools
+    ? TOOLS.filter((candidate) => allowedTools.includes(candidate.id))
+    : TOOLS;
 
   modeRef.current = mode;
 
@@ -158,6 +178,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   );
 
   useEffect(() => {
+    if (!showModeTabs) return undefined;
     const worker = new Worker(new URL("../workers/formula.worker.js", import.meta.url), {
       type: "module",
     });
@@ -183,7 +204,7 @@ export const ApertureEditor = memo(function ApertureEditor({
       }
     };
     return () => worker.terminate();
-  }, [onChange]);
+  }, [onChange, showModeTabs]);
 
   useEffect(() => {
     if (mode !== "function" || !formulaWorkerRef.current) return;
@@ -219,6 +240,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   useEffect(() => {
     if (mode !== "draw") return undefined;
     function handleUndoShortcut(event) {
+      if (activeDrawingEditorId !== editorId) return;
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== "z") return;
       const target = event.target;
       if (target instanceof HTMLElement
@@ -230,7 +252,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     }
     window.addEventListener("keydown", handleUndoShortcut);
     return () => window.removeEventListener("keydown", handleUndoShortcut);
-  }, [mode, onChange]);
+  }, [editorId, mode, onChange]);
 
   function renderAmplitude(amplitude) {
     const canvas = canvasRef.current;
@@ -244,11 +266,13 @@ export const ApertureEditor = memo(function ApertureEditor({
     }
     const { image } = apertureRasterRef.current;
     for (let index = 0; index < amplitude.length; index += 1) {
-      const gray = Math.round(255 * Math.max(0, Math.min(1, amplitude[index])));
+      const modulus = Math.max(0, Math.min(1, amplitude[index]));
+      const gray = Math.round(255 * modulus);
+      const phaseVisible = showPhase && Math.abs(apertureRef.current?.phase[index] ?? 0) > 0.01;
       const offset = index * 4;
-      image.data[offset] = gray;
-      image.data[offset + 1] = gray;
-      image.data[offset + 2] = gray;
+      image.data[offset] = phaseVisible ? Math.round(92 * modulus) : gray;
+      image.data[offset + 1] = phaseVisible ? Math.round(182 * modulus) : gray;
+      image.data[offset + 2] = phaseVisible ? Math.round(255 * modulus) : gray;
       image.data[offset + 3] = 255;
     }
     context.putImageData(image, 0, 0);
@@ -789,6 +813,7 @@ export const ApertureEditor = memo(function ApertureEditor({
 
   function handlePointerDown(event) {
     if (mode !== "draw" || event.button !== 0) return;
+    activeDrawingEditorId = editorId;
     if (tool === "polygon") {
       addPolygonVertex(event);
       return;
@@ -1076,7 +1101,8 @@ export const ApertureEditor = memo(function ApertureEditor({
     strokeApertureRef.current = null;
     apertureRef.current = next;
     renderAmplitude(next.amplitude);
-    onChange(next);
+    onChange(next, { quality: "final" });
+    setToolMessage(clearLabel === "全不通" ? "频谱面已设为完全不透光" : "画布内容已清空");
   }
 
   function undo() {
@@ -1164,29 +1190,33 @@ export const ApertureEditor = memo(function ApertureEditor({
   }
 
   return (
-    <section className="aperture-module" aria-labelledby="aperture-title">
+    <section
+      className={`aperture-module ${showModeTabs ? "" : "aperture-editor-embedded"}`}
+      aria-labelledby={editorId}
+      onPointerDownCapture={() => { activeDrawingEditorId = editorId; }}
+    >
       <header className="module-header">
         <div>
-          <span className="module-index">01</span>
+          <span className="module-index">{index}</span>
           <div>
-            <h2 id="aperture-title">衍射屏</h2>
-            <p>复振幅屏函数 T(x, y)</p>
+            <h2 id={editorId}>{title}</h2>
+            <p>{subtitle}</p>
           </div>
         </div>
-        <div className="editor-mode" role="tablist" aria-label="衍射屏编辑方式">
+        {showModeTabs && <div className="editor-mode" role="tablist" aria-label="衍射屏编辑方式">
           <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "active" : ""} onClick={() => changeEditorMode("draw")}>
             <PencilSimple size={16} weight="duotone" /> 绘制模式
           </button>
           <button type="button" role="tab" aria-selected={mode === "function"} className={mode === "function" ? "active" : ""} onClick={() => changeEditorMode("function")} data-tour="function-mode">
             <FunctionIcon size={16} weight="bold" /> 屏函数模式
           </button>
-        </div>
+        </div>}
       </header>
 
       <div className="aperture-workspace">
         {mode === "draw" && (
           <div className="drawing-toolbar" aria-label="绘制工具">
-            {TOOLS.map(({ id, label, Icon }) => (
+            {visibleTools.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 type="button"
@@ -1199,7 +1229,7 @@ export const ApertureEditor = memo(function ApertureEditor({
                 <Icon className={id === "ellipse" ? "ellipse-tool-icon" : undefined} size={19} weight={tool === id ? "fill" : "regular"} />
               </button>
             ))}
-            <button
+            {showRepeat && <button
               type="button"
               className={`toolbar-repeat-button ${repeatPanelOpen ? "active" : ""}`}
               onClick={() => setRepeatPanelOpen((openPanel) => !openPanel)}
@@ -1209,13 +1239,14 @@ export const ApertureEditor = memo(function ApertureEditor({
               data-tour="repeat-unit"
             >
               <Repeat size={17} /><span>重复单元</span>
-            </button>
+            </button>}
           </div>
         )}
         <div className="aperture-canvas-shell">
+          {canvasUnderlay && <div className="aperture-canvas-underlay" aria-hidden="true">{canvasUnderlay}</div>}
           <canvas
             ref={canvasRef}
-            className={`aperture-canvas tool-${tool}`}
+            className={`aperture-canvas tool-${tool} ${canvasClassName}`}
             width={size}
             height={size}
             onPointerDown={handlePointerDown}
@@ -1225,7 +1256,7 @@ export const ApertureEditor = memo(function ApertureEditor({
             onDoubleClick={() => {
               if (tool === "polygon" && polygonVerticesRef.current.length >= 3) finishPolygon();
             }}
-            aria-label="衍射屏透光率绘制区域，黑色不透光，白色完全透光"
+            aria-label={canvasAriaLabel}
           />
           <svg className="aperture-grid" viewBox="0 0 100 100" aria-hidden="true">
             <g>
@@ -1357,6 +1388,7 @@ export const ApertureEditor = memo(function ApertureEditor({
               <output>{transmission.toFixed(2)}</output>
             </label>
           )}
+          {supplementalControls}
           {tool === "polygon" && (
             <div className="polygon-finish-actions">
               <button type="button" onClick={finishPolygon} disabled={polygonVertices.length < 3}><Check size={14} /> 完成多边形</button>
@@ -1371,9 +1403,9 @@ export const ApertureEditor = memo(function ApertureEditor({
             <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销 Ctrl+Z（剩余 ${undoCount}/3 步）`}>
               <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
             </button>
-            <button type="button" onClick={clearAperture} title="清空衍射屏全部内容"><Trash size={17} /><span>清空画布</span></button>
-            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共衍射屏" data-tour="community"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
-            <details className="local-save-menu">
+            <button type="button" onClick={clearAperture} title={clearTitle}><Trash size={17} /><span>{clearLabel}</span></button>
+            {showCommunity && onOpenCommunity && <button type="button" onClick={onOpenCommunity} title="浏览或上传公共衍射屏" data-tour="community"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>}
+            {showLocalStorage && <details className="local-save-menu">
               <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏" data-tour="local-save"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
               <div className="local-save-panel">
                 <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
@@ -1398,7 +1430,7 @@ export const ApertureEditor = memo(function ApertureEditor({
                 </div>
                 <p aria-live="polite">{storageMessage}</p>
               </div>
-            </details>
+            </details>}
           </div>
         </div>
       ) : (

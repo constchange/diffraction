@@ -78,7 +78,12 @@ function SliderField({ label, symbol, valueText, min, max, step, value, onChange
   );
 }
 
-export function FraunhoferLab({ compact = false, communityApiBase = "/api/community-apertures" }) {
+export function FraunhoferLab({
+  compact = false,
+  communityApiBase = "/api/community-apertures",
+  embeddedInWorkspace = false,
+  workspaceActive = true,
+}) {
   const initialApertureRef = useRef(null);
   if (!initialApertureRef.current) initialApertureRef.current = createAperture(APERTURE_SIZE);
   const initialAperture = initialApertureRef.current;
@@ -200,15 +205,15 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
 
   return (
     <div className={`fraunhofer-lab-root ${compact ? "compact" : ""}`}>
-      <header className="lab-topbar">
+      {!embeddedInWorkspace && <header className="lab-topbar">
         <div className="academy-title">
           <strong>启慧研习院</strong>
           <span aria-hidden="true">·</span>
           <span>夫朗禾费衍射仿真</span>
         </div>
-      </header>
+      </header>}
 
-      <main className="lab-main">
+      <main className={`lab-main ${embeddedInWorkspace ? "workspace-embedded-lab" : ""}`}>
         <FraunhoferApparatus />
 
         <div className="experiment-layout">
@@ -333,7 +338,7 @@ export function FraunhoferLab({ compact = false, communityApiBase = "/api/commun
         onLoad={loadCommunityAperture}
         onClose={() => setCommunityOpen(false)}
       />
-      <OnboardingTour open={onboardingOpen && !communityOpen} onClose={closeOnboarding} />
+      <OnboardingTour open={onboardingOpen && !communityOpen && workspaceActive} onClose={closeOnboarding} />
     </div>
   );
 }

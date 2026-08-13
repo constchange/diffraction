@@ -95,12 +95,13 @@ export function renderFieldRgba(field, params, width = SCREEN_SIZE, height = SCR
     whiteLight = false,
     zoom = 1.45,
     displayMode = "enhanced",
+    monochromeColor = null,
   } = params;
   const wavelengths = whiteLight ? WHITE_SPECTRUM : [wavelength];
   const samplers = wavelengths.map((lambda) => {
     const physicalScale = (lambda / 532) * (focalLength / 1.2) * zoom;
     return {
-      color: wavelengthToRgb(lambda).map((channel) => channel / 255),
+      color: (monochromeColor ?? wavelengthToRgb(lambda)).map((channel) => channel / 255),
       x: coordinateTable(width, field.size, physicalScale),
       y: coordinateTable(height, field.size, physicalScale),
     };

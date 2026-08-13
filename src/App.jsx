@@ -1,5 +1,8 @@
-import { FraunhoferLab } from "./components/FraunhoferLab.jsx";
+import { ExperimentWorkspace } from "./components/ExperimentWorkspace.jsx";
 
 export function App() {
-  return <FraunhoferLab />;
+  const requestedExperiment = typeof window === "undefined"
+    ? "fraunhofer"
+    : new URLSearchParams(window.location.search).get("experiment") ?? "fraunhofer";
+  return <ExperimentWorkspace initialExperiment={requestedExperiment} />;
 }
