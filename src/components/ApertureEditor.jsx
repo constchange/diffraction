@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ArrowsOutCardinal } from "@phosphor-icons/react/ArrowsOutCardinal";
+import { Books } from "@phosphor-icons/react/Books";
 import { Check } from "@phosphor-icons/react/Check";
 import { Circle } from "@phosphor-icons/react/Circle";
 import { Eraser } from "@phosphor-icons/react/Eraser";
@@ -22,7 +23,7 @@ import { Trash } from "@phosphor-icons/react/Trash";
 import { Triangle } from "@phosphor-icons/react/Triangle";
 import { X } from "@phosphor-icons/react/X";
 import katex from "katex";
-import { FORMULA_PRESETS } from "../core/presets.js";
+import { COMMON_LIBRARY_PRESETS, FORMULA_PRESETS } from "../core/presets.js";
 import {
   constrainEllipseToCircle,
   constrainPointToAxis,
@@ -80,6 +81,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   onFormulaChange,
   onFunctionEditStart,
   onOpenCommunity,
+  onLoadCommonPreset,
   isRenderingPaused = false,
   title = "衍射屏",
   subtitle = "复振幅屏函数 T(x, y)",
@@ -153,6 +155,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   });
   const [selectedSaveId, setSelectedSaveId] = useState("");
   const [storageMessage, setStorageMessage] = useState("可保存当前屏函数");
+  const [commonLibraryOpen, setCommonLibraryOpen] = useState(false);
   const visibleTools = allowedTools
     ? TOOLS.filter((candidate) => allowedTools.includes(candidate.id))
     : TOOLS;
@@ -1190,9 +1193,78 @@ export const ApertureEditor = memo(function ApertureEditor({
     }
   }
 
+  function loadCommonPreset(preset) {
+    cancelPolygon(false);
+    resetEditableShape();
+    clearSelection();
+    strokeApertureRef.current = null;
+    setCommonLibraryOpen(false);
+    if (onLoadCommonPreset) onLoadCommonPreset(preset);
+    else {
+      onFormulaChange(preset.latex);
+      onModeChange("function");
+    }
+  }
+
+  const commonLibraryMenu = showModeTabs ? (
+    <div className="common-library-menu">
+      <button
+        type="button"
+        className="content-entry common-library-trigger"
+        onClick={() => setCommonLibraryOpen((value) => !value)}
+        title="载入常用光学屏函数"
+        data-tour="common-library"
+        aria-expanded={commonLibraryOpen}
+      >
+        <Books size={17} weight="duotone" /><span>常用库</span>
+      </button>
+      {commonLibraryOpen && (
+        <section className="common-library-panel" aria-label="常用屏函数库">
+          <header><div><strong>常用屏函数</strong><span>载入后进入屏函数模式</span></div><button type="button" onClick={() => setCommonLibraryOpen(false)} aria-label="关闭常用库"><X size={14} /></button></header>
+          <div>
+            {COMMON_LIBRARY_PRESETS.map((preset) => (
+              <button key={preset.id} type="button" onClick={() => loadCommonPreset(preset)}>
+                <strong>{preset.name}</strong><small>{preset.description}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  ) : null;
+
+  const communityButton = showCommunity && onOpenCommunity ? (
+    <button type="button" className="content-entry creative-center-trigger" onClick={onOpenCommunity} title="浏览或上传创意衍射屏" data-tour="creative-center">
+      <GlobeHemisphereWest size={17} weight="duotone" /><span>创意中心</span>
+    </button>
+  ) : null;
+
+  const localSaveMenu = showLocalStorage ? (
+    <details className="local-save-menu">
+      <summary title="本地保存或载入衍射屏" aria-label="本地保存或载入衍射屏" data-tour="local-save"><FloppyDisk size={17} /><span>本地存取</span></summary>
+      <div className="local-save-panel">
+        <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
+        <select value={selectedSaveId} onChange={(event) => setSelectedSaveId(event.target.value)} aria-label="选择本地衍射屏存档">
+          <option value="">选择一个存档</option>
+          {savedApertures.map((item) => (
+            <option key={item.id} value={item.id}>
+              [{screenDefinitionMode(item.data) === "function" ? "函数" : "绘制"}] {item.name} · {new Date(item.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+            </option>
+          ))}
+        </select>
+        <div>
+          <button type="button" onClick={saveApertureLocally} disabled={savedApertures.length >= MAX_LOCAL_APERTURES}><FloppyDisk size={15} /> 保存当前</button>
+          <button type="button" onClick={loadSelectedAperture} disabled={!selectedSaveId}><FolderOpen size={15} /> 载入</button>
+          <button type="button" onClick={deleteSelectedAperture} disabled={!selectedSaveId}><Trash size={15} /> 删除</button>
+        </div>
+        <p aria-live="polite">{storageMessage}</p>
+      </div>
+    </details>
+  ) : null;
+
   return (
     <section
-      className={`aperture-module ${showModeTabs ? "" : "aperture-editor-embedded"}`}
+      className={`aperture-module ${showModeTabs ? "" : "aperture-editor-embedded"} ${commonLibraryOpen ? "common-library-open" : ""}`}
       aria-labelledby={editorId}
       onPointerDownCapture={() => { activeDrawingEditorId = editorId; }}
     >
@@ -1401,38 +1473,14 @@ export const ApertureEditor = memo(function ApertureEditor({
           )}
           <p className="tool-status" aria-live="polite">{toolMessage}</p>
           <div className="canvas-actions utility-actions">
-            <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销 Ctrl+Z（剩余 ${undoCount}/3 步）`}>
-              <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
-            </button>
-            <button type="button" onClick={clearAperture} title={clearTitle}><Trash size={17} /><span>{clearLabel}</span></button>
-            {utilityControls}
-            {showCommunity && onOpenCommunity && <button type="button" onClick={onOpenCommunity} title="浏览或上传公共衍射屏" data-tour="community"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>}
-            {showLocalStorage && <details className="local-save-menu">
-              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏" data-tour="local-save"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
-              <div className="local-save-panel">
-                <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
-                <select value={selectedSaveId} onChange={(event) => setSelectedSaveId(event.target.value)} aria-label="选择本地衍射屏存档">
-                  <option value="">选择一个存档</option>
-                  {savedApertures.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      [{screenDefinitionMode(item.data) === "function" ? "函数" : "绘制"}] {item.name} · {new Date(item.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                    </option>
-                  ))}
-                </select>
-                <div>
-                  <button type="button" onClick={saveApertureLocally} disabled={savedApertures.length >= MAX_LOCAL_APERTURES}>
-                    <FloppyDisk size={15} /> 保存当前
-                  </button>
-                  <button type="button" onClick={loadSelectedAperture} disabled={!selectedSaveId}>
-                    <FolderOpen size={15} /> 载入
-                  </button>
-                  <button type="button" onClick={deleteSelectedAperture} disabled={!selectedSaveId}>
-                    <Trash size={15} /> 删除
-                  </button>
-                </div>
-                <p aria-live="polite">{storageMessage}</p>
-              </div>
-            </details>}
+            <div className="content-entry-actions">{commonLibraryMenu}{communityButton}{localSaveMenu}</div>
+            <div className="edit-history-actions">
+              {utilityControls}
+              <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销 Ctrl+Z（剩余 ${undoCount}/3 步）`}>
+                <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
+              </button>
+              <button type="button" onClick={clearAperture} title={clearTitle}><Trash size={17} /><span>{clearLabel}</span></button>
+            </div>
           </div>
         </div>
       ) : (
@@ -1450,33 +1498,7 @@ export const ApertureEditor = memo(function ApertureEditor({
           <div className="formula-preview" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
           <p className={`formula-status ${formulaState.state}`}>{formulaState.message}</p>
           <div className="canvas-actions utility-actions formula-utility-actions">
-            <button type="button" onClick={onOpenCommunity} title="浏览或上传公共屏函数" data-tour="community"><GlobeHemisphereWest size={17} /><span>公共空间</span></button>
-            <details className="local-save-menu">
-              <summary title="保存或载入衍射屏" aria-label="保存或载入衍射屏" data-tour="local-save"><FloppyDisk size={17} /><span>保存 / 载入</span></summary>
-              <div className="local-save-panel">
-                <header><strong>本地衍射屏</strong><span>{savedApertures.length}/{MAX_LOCAL_APERTURES}</span></header>
-                <select value={selectedSaveId} onChange={(event) => setSelectedSaveId(event.target.value)} aria-label="选择本地衍射屏存档">
-                  <option value="">选择一个存档</option>
-                  {savedApertures.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      [{screenDefinitionMode(item.data) === "function" ? "函数" : "绘制"}] {item.name} · {new Date(item.savedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                    </option>
-                  ))}
-                </select>
-                <div>
-                  <button type="button" onClick={saveApertureLocally} disabled={savedApertures.length >= MAX_LOCAL_APERTURES}>
-                    <FloppyDisk size={15} /> 保存当前
-                  </button>
-                  <button type="button" onClick={loadSelectedAperture} disabled={!selectedSaveId}>
-                    <FolderOpen size={15} /> 载入
-                  </button>
-                  <button type="button" onClick={deleteSelectedAperture} disabled={!selectedSaveId}>
-                    <Trash size={15} /> 删除
-                  </button>
-                </div>
-                <p aria-live="polite">{storageMessage}</p>
-              </div>
-            </details>
+            <div className="content-entry-actions">{commonLibraryMenu}{communityButton}{localSaveMenu}</div>
           </div>
         </div>
       )}

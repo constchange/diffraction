@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { calculateTourPlacement, ONBOARDING_STEPS } from "../src/core/onboarding.js";
 
-test("onboarding covers the seven requested controls", () => {
-  assert.equal(ONBOARDING_STEPS.length, 7);
+test("onboarding covers the updated eight requested controls", () => {
+  assert.equal(ONBOARDING_STEPS.length, 8);
   assert.deepEqual(
     ONBOARDING_STEPS.map((step) => step.id),
-    ["draw", "selection", "repeat", "function", "community", "local-save", "export"],
+    ["draw", "selection", "repeat", "function", "common-library", "creative-center", "local-save", "export"],
   );
   for (const step of ONBOARDING_STEPS) assert.match(step.selector, /^\[data-tour=/);
 });

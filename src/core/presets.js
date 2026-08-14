@@ -1,3 +1,64 @@
+function slitArrayLatex(count, spacing, width) {
+  const centre = (count - 1) / 2;
+  const slits = Array.from({ length: count }, (_, index) => {
+    const position = (index - centre) * spacing;
+    const signedPosition = position >= 0 ? `x-${position.toFixed(4)}` : `x+${Math.abs(position).toFixed(4)}`;
+    return String.raw`\operatorname{rect}\left(\frac{${signedPosition}}{${width}}\right)`;
+  });
+  return String.raw`\operatorname{rect}\left(\frac{y}{1.16}\right)\cdot\left[${slits.join("+")}\right]`;
+}
+
+export const COMMON_LIBRARY_PRESETS = Object.freeze([
+  {
+    id: "single-slit",
+    name: "单缝",
+    description: "窄缝衍射",
+    latex: String.raw`\operatorname{rect}\left(\frac{x}{0.10}\right)\cdot\operatorname{rect}\left(\frac{y}{1.16}\right)`,
+  },
+  {
+    id: "equal-double-slit",
+    name: "等宽双缝",
+    description: "相同缝宽",
+    latex: slitArrayLatex(2, 0.36, 0.09),
+  },
+  {
+    id: "unequal-double-slit",
+    name: "不等宽双缝",
+    description: "不同缝宽",
+    latex: String.raw`\operatorname{rect}\left(\frac{y}{1.16}\right)\cdot\left[\operatorname{rect}\left(\frac{x-0.20}{0.07}\right)+\operatorname{rect}\left(\frac{x+0.20}{0.13}\right)\right]`,
+  },
+  {
+    id: "five-slits",
+    name: "5条缝",
+    description: "多缝干涉",
+    latex: slitArrayLatex(5, 0.18, 0.055),
+  },
+  {
+    id: "rectangular-aperture",
+    name: "矩孔",
+    description: "矩形孔径",
+    latex: String.raw`\operatorname{rect}\left(\frac{x}{0.52}\right)\cdot\operatorname{rect}\left(\frac{y}{0.30}\right)`,
+  },
+  {
+    id: "circular-aperture",
+    name: "圆孔",
+    description: "艾里斑",
+    latex: String.raw`\operatorname{circ}\left(\frac{\sqrt{x^2+y^2}}{0.34}\right)`,
+  },
+  {
+    id: "binary-grating-16",
+    name: "普通光栅（16线）",
+    description: "等宽等距狭缝",
+    latex: slitArrayLatex(16, 0.11, 0.035),
+  },
+  {
+    id: "cosine-grating-16",
+    name: "余弦光栅（16线）",
+    description: "正弦振幅调制",
+    latex: String.raw`\operatorname{rect}\left(\frac{y}{1.16}\right)\cdot\frac{1+\cos\left(16\pi x\right)}{2}`,
+  },
+]);
+
 export const FORMULA_PRESETS = [
   {
     id: "circle",
@@ -7,7 +68,7 @@ export const FORMULA_PRESETS = [
   {
     id: "double-slit",
     name: "双缝",
-    latex: String.raw`\operatorname{rect}\left(\frac{y}{1.16}\right)\cdot\left[\operatorname{rect}\left(\frac{x-0.18}{0.09}\right)+\operatorname{rect}\left(\frac{x+0.18}{0.09}\right)\right]`,
+    latex: COMMON_LIBRARY_PRESETS.find((preset) => preset.id === "equal-double-slit").latex,
   },
   {
     id: "square",

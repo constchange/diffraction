@@ -1140,6 +1140,12 @@ input[type="range"] {
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.18);
 }
 
+.aperture-module.common-library-open {
+  position: relative;
+  z-index: 16;
+  overflow: visible;
+}
+
 .module-header {
   display: flex;
   min-width: 0;
@@ -1533,8 +1539,27 @@ input[type="range"] {
   gap: 6px;
 }
 
+.content-entry-actions,
+.edit-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.content-entry-actions {
+  min-width: 0;
+}
+
+.edit-history-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
 .utility-actions > button,
-.utility-actions .local-save-menu > summary {
+.utility-actions .local-save-menu > summary,
+.utility-actions .content-entry-actions button,
+.utility-actions .edit-history-actions button {
   display: flex;
   width: auto;
   height: 31px;
@@ -1550,10 +1575,126 @@ input[type="range"] {
 }
 
 .utility-actions > button:hover,
-.utility-actions .local-save-menu > summary:hover {
+.utility-actions .local-save-menu > summary:hover,
+.utility-actions .content-entry-actions button:hover,
+.utility-actions .edit-history-actions button:hover {
   color: #fff;
   border-color: #3c6dae;
   background: #122a50;
+}
+
+.common-library-menu {
+  position: relative;
+}
+
+.utility-actions .content-entry-actions .content-entry {
+  position: relative;
+  overflow: hidden;
+  color: #241805;
+  border-color: rgba(255, 225, 132, 0.92);
+  background:
+    radial-gradient(circle at 20% 0, rgba(255, 255, 255, 0.58), transparent 42%),
+    linear-gradient(135deg, #fff1a8, #e6b94f 56%, #bd7d24);
+  box-shadow: 0 7px 18px rgba(190, 123, 28, 0.3), 0 0 0 1px rgba(255, 248, 211, 0.28) inset;
+}
+
+.utility-actions .content-entry-actions .creative-center-trigger {
+  color: #ffe7a6;
+  border-color: rgba(244, 197, 89, 0.88);
+  background:
+    radial-gradient(circle at 20% 0, rgba(255, 218, 119, 0.2), transparent 42%),
+    linear-gradient(135deg, #38260f, #543618 58%, #352718);
+  box-shadow: 0 7px 18px rgba(181, 116, 25, 0.24), 0 0 0 1px rgba(255, 223, 139, 0.12) inset;
+}
+
+.utility-actions .content-entry-actions .content-entry:hover {
+  color: #1c1203;
+  border-color: #fff0aa;
+  background: linear-gradient(135deg, #fff6c8, #f2cb63 56%, #d6922c);
+  transform: translateY(-1px);
+  box-shadow: 0 9px 22px rgba(216, 151, 44, 0.38), 0 0 18px rgba(255, 210, 91, 0.18);
+}
+
+.utility-actions .content-entry-actions .creative-center-trigger:hover {
+  color: #fff1bf;
+  border-color: #ffe28a;
+  background: linear-gradient(135deg, #4b3212, #6a4219 58%, #45301b);
+  box-shadow: 0 9px 22px rgba(210, 143, 35, 0.34), 0 0 18px rgba(255, 204, 78, 0.16);
+}
+
+.common-library-panel {
+  position: absolute;
+  z-index: 18;
+  bottom: 40px;
+  left: 0;
+  display: grid;
+  width: 304px;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #35659e;
+  border-radius: 11px;
+  color: #c9dbf2;
+  background:
+    radial-gradient(circle at 15% 0, rgba(60, 189, 255, 0.12), transparent 38%),
+    #07162d;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+}
+
+.common-library-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.common-library-panel header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.common-library-panel header strong { color: #f0f7ff; font-size: 12px; }
+.common-library-panel header span { color: #6fa4d8; font-size: 8px; }
+.common-library-panel header > button {
+  width: 27px !important;
+  min-height: 27px !important;
+  padding: 0 !important;
+  border: 1px solid #294c78 !important;
+  background: #0a1c38 !important;
+}
+
+.common-library-panel > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.utility-actions .common-library-panel > div > button {
+  display: grid;
+  min-height: 48px;
+  justify-items: start;
+  align-content: center;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid #24466f;
+  border-radius: 7px;
+  color: #b9cee9;
+  background: #0a1d39;
+  cursor: pointer;
+  text-align: left;
+}
+
+.utility-actions .common-library-panel > div > button:hover {
+  color: #fff;
+  border-color: #469be0;
+  background: #123461;
+}
+
+.common-library-panel > div strong { font-size: 10px; }
+.common-library-panel > div small { color: #6384ac; font-size: 8px; }
+
+.content-entry-actions .local-save-panel {
+  right: auto;
+  left: 0;
 }
 
 .undo-action {
@@ -1917,6 +2058,7 @@ input[type="range"] {
 
 .formula-utility-actions {
   grid-column: 1 / -1;
+  justify-content: flex-start;
   padding-top: 2px;
   border-top: 1px solid rgba(40, 68, 111, 0.55);
 }

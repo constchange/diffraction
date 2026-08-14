@@ -30,17 +30,24 @@ export const ONBOARDING_STEPS = Object.freeze([
     description: "切换到屏函数模式，用 LaTeX 复函数精确描述振幅与相位分布。",
   },
   {
-    id: "community",
-    selector: '[data-tour="community"]',
+    id: "common-library",
+    selector: '[data-tour="common-library"]',
+    eyebrow: "从经典实验开始",
+    title: "打开常用库",
+    description: "一键载入单缝、双缝、圆孔、矩孔和 16 线光栅等经典屏函数，立即观察远场图样。",
+  },
+  {
+    id: "creative-center",
+    selector: '[data-tour="creative-center"]',
     eyebrow: "分享与发现",
-    title: "进入公共空间",
+    title: "探索创意中心",
     description: "上传当前衍射屏，也可以按名称浏览并载入其他同学分享的作品。",
   },
   {
     id: "local-save",
     selector: '[data-tour="local-save"]',
     eyebrow: "留住实验进度",
-    title: "保存到本地",
+    title: "使用本地存取",
     description: "把常用衍射屏保存在当前浏览器，之后可随时载入继续实验。",
   },
   {

@@ -127,12 +127,28 @@ export function FraunhoferLab({
       locallySeen = false;
     }
 
+    if (locallySeen && !localTourPreviewOpen()) return undefined;
+
+    if (localTourPreviewOpen()) return undefined;
+
     claimOnboardingOnce(communityApiBase)
       .then((result) => {
-        if (!cancelled && result.show && !locallySeen) setOnboardingOpen(true);
+        if (cancelled) return;
+        try {
+          window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+        } catch {
+          // The server-side IP claim remains the cross-browser fallback.
+        }
+        if (result.show) setOnboardingOpen(true);
       })
       .catch(() => {
-        if (!cancelled && !locallySeen) setOnboardingOpen(true);
+        if (cancelled) return;
+        try {
+          window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+        } catch {
+          // The guide can still be completed without browser storage.
+        }
+        setOnboardingOpen(true);
       });
     return () => { cancelled = true; };
   }, [communityApiBase]);
@@ -201,6 +217,12 @@ export function FraunhoferLab({
     announce(`已载入“${item.patternName}”`);
   }, [announce, submitAperture]);
 
+  const loadCommonPreset = useCallback((preset) => {
+    setScreenFormula(preset.latex);
+    setEditorMode("function");
+    announce(`已从常用库载入“${preset.name}”`);
+  }, [announce]);
+
   const lightColor = `rgb(${wavelengthColor.join(",")})`;
 
   return (
@@ -230,6 +252,7 @@ export function FraunhoferLab({
                 onFormulaChange={setScreenFormula}
                 onFunctionEditStart={pauseForFunctionEdit}
                 onOpenCommunity={() => setCommunityOpen(true)}
+                onLoadCommonPreset={loadCommonPreset}
                 isRenderingPaused={!autoRun}
               />
 

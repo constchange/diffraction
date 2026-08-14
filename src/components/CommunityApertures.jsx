@@ -228,13 +228,13 @@ export function CommunityApertures({
         <header className="community-header">
           <div className="community-heading-mark"><GlobeHemisphereWest size={24} weight="duotone" /></div>
           <div>
-            <h2 id="community-title">公共衍射屏</h2>
+            <h2 id="community-title">创意中心</h2>
             <p>分享实验灵感，也可以载入其他同学的屏函数</p>
           </div>
-          <button type="button" className="community-close" onClick={onClose} disabled={Boolean(action)} aria-label="关闭公共空间"><X size={18} /></button>
+          <button type="button" className="community-close" onClick={onClose} disabled={Boolean(action)} aria-label="关闭创意中心"><X size={18} /></button>
         </header>
 
-        <div className="community-tabs" role="tablist" aria-label="公共空间页面">
+        <div className="community-tabs" role="tablist" aria-label="创意中心页面">
           <button type="button" role="tab" aria-selected={tab === "browse"} className={tab === "browse" ? "active" : ""} onClick={() => setTab("browse")}>
             <GlobeHemisphereWest size={16} /> 浏览全部 <span>{total}</span>
           </button>
@@ -252,7 +252,7 @@ export function CommunityApertures({
               <button type="button" onClick={() => refreshPublic(page)} disabled={loadingPublic}><ArrowClockwise size={15} className={loadingPublic ? "spinning" : ""} /> 刷新</button>
             </div>
             {publicItems.length === 0 && !loadingPublic ? (
-              <EmptyState>公共空间还是空的，去“我的上传”分享第一个作品吧。</EmptyState>
+              <EmptyState>创意中心还是空的，去“我的上传”分享第一个作品吧。</EmptyState>
             ) : (
               <div className={`community-gallery ${loadingPublic ? "loading" : ""}`}>
                 {publicItems.map((item) => (
