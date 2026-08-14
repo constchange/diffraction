@@ -568,6 +568,10 @@ body {
 .spatial-mobile-switcher { display: none; }
 
 .spatial-editor-module {
+  --spatial-editor-toolbar-left: 8px;
+  --spatial-editor-toolbar-top: 12px;
+  --spatial-editor-canvas-offset-x: 82px;
+  --spatial-editor-workspace-height: 325px;
   display: block;
   overflow: visible;
   border: 0;
@@ -578,27 +582,29 @@ body {
 .spatial-editor-module > .aperture-module {
   height: auto;
   min-height: 0;
-  grid-template-rows: 58px 392px auto;
+  grid-template-rows: 58px var(--spatial-editor-workspace-height) auto;
   overflow: visible;
 }
 
 .spatial-editor-module .aperture-workspace {
-  min-height: 392px;
+  min-height: var(--spatial-editor-workspace-height);
   overflow: hidden;
 }
 
 .spatial-editor-module .aperture-canvas-shell {
-  width: min(70%, 300px);
+  position: absolute;
+  top: var(--spatial-editor-toolbar-top);
+  left: calc(var(--spatial-editor-toolbar-left) + var(--spatial-editor-canvas-offset-x));
+  width: min(70%, 300px, calc(100% - var(--spatial-editor-toolbar-left) - var(--spatial-editor-canvas-offset-x) - 10px));
 }
 
 .spatial-editor-module .aperture-workspace {
-  place-items: center;
   padding: 0;
 }
 
 .spatial-editor-module .drawing-toolbar {
-  top: 12px;
-  left: 8px;
+  top: var(--spatial-editor-toolbar-top);
+  left: var(--spatial-editor-toolbar-left);
   grid-template-columns: repeat(2, 30px);
 }
 
@@ -659,7 +665,7 @@ body {
 }
 
 .spectrum-module .drawing-toolbar {
-  grid-template-columns: repeat(3, 30px);
+  grid-template-columns: 30px;
 }
 
 .spectrum-module .draw-controls {
@@ -680,22 +686,17 @@ body {
 
 @media (max-width: 600px) {
   .spatial-editor-module > .aperture-module {
-    grid-template-rows: 58px 410px auto;
+    grid-template-rows: 58px var(--spatial-editor-workspace-height) auto;
   }
 
   .spatial-editor-module .aperture-workspace {
-    min-height: 410px;
-    place-items: center end;
+    min-height: var(--spatial-editor-workspace-height);
     overflow: hidden;
-    padding: 12px 8px 12px 86px;
+    padding: 0;
   }
 
   .spatial-editor-module .aperture-canvas-shell {
-    width: min(100%, 300px);
-  }
-
-  .spatial-editor-module .drawing-toolbar {
-    left: 4px;
+    width: min(300px, calc(100% - var(--spatial-editor-toolbar-left) - var(--spatial-editor-canvas-offset-x) - 10px));
   }
 
   .spatial-editor-module .draw-controls,
