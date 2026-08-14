@@ -28,10 +28,13 @@ test("complex vortex preset keeps phase while displaying unit modulus", () => {
   assert.ok(Math.max(...activePhases) - Math.min(...activePhases) > 3);
 });
 
-test("the common library provides eight valid function-mode optical screens", () => {
+test("the common library provides distinct valid function-mode optical screens", () => {
   assert.deepEqual(
     COMMON_LIBRARY_PRESETS.map((preset) => preset.name),
-    ["单缝", "等宽双缝", "不等宽双缝", "5条缝", "矩孔", "圆孔", "普通光栅（16线）", "余弦光栅（16线）"],
+    [
+      "单缝", "等宽双缝", "不等宽双缝", "5条缝", "矩孔", "圆孔",
+      "普通光栅（16线）", "余弦光栅（16线）", "涡旋相位", "环形孔", "高斯孔径", "余弦波带片",
+    ],
   );
   for (const preset of COMMON_LIBRARY_PRESETS) {
     assert.ok(preset.latex.length > 0 && preset.latex.length <= 1200, `${preset.name} formula length`);
@@ -41,4 +44,35 @@ test("the common library provides eight valid function-mode optical screens", ()
     assert.ok(amplitude.every((value) => value >= 0 && value <= 1), `${preset.name} amplitude bounds`);
     assert.ok(phase.every(Number.isFinite), `${preset.name} phase values`);
   }
+});
+
+test("the common-library vortex is exactly the original formula preset", () => {
+  const commonVortex = COMMON_LIBRARY_PRESETS.find((preset) => preset.id === "vortex");
+  const originalVortex = FORMULA_PRESETS.find((preset) => preset.id === "vortex");
+  assert.equal(commonVortex.latex, originalVortex.latex);
+  assert.equal(commonVortex.description, "三阶螺旋相位");
+});
+
+test("the added amplitude presets render their intended previews", () => {
+  const size = 64;
+  const centre = (size / 2) * size + size / 2;
+  const annular = evaluateScreenFunction(
+    COMMON_LIBRARY_PRESETS.find((preset) => preset.id === "annular-aperture").latex,
+    size,
+  ).amplitude;
+  assert.equal(annular[centre], 0);
+  assert.equal(annular[(size / 2) * size + 43], 1);
+
+  const gaussian = evaluateScreenFunction(
+    COMMON_LIBRARY_PRESETS.find((preset) => preset.id === "gaussian-aperture").latex,
+    size,
+  ).amplitude;
+  assert.ok(gaussian[centre] > 0.99);
+  assert.ok(gaussian[0] < 0.001);
+
+  const zonePlate = evaluateScreenFunction(
+    COMMON_LIBRARY_PRESETS.find((preset) => preset.id === "cosine-zone-plate").latex,
+    size,
+  ).amplitude;
+  assert.ok(new Set(Array.from(zonePlate, (value) => value.toFixed(3))).size > 20);
 });

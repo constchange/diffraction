@@ -631,37 +631,15 @@ body {
 }
 
 .spatial-editor-module .utility-actions {
+  align-items: stretch;
   justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid rgba(35, 67, 108, 0.72);
 }
 
 .spatial-editor-presets {
   grid-column: 1 / -1;
-  order: 2;
-}
-
-.spatial-filter-binary-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.spatial-filter-binary-actions button {
-  display: flex;
-  min-height: 29px;
-  align-items: center;
-  gap: 5px;
-  padding: 0 10px;
-  border: 1px solid #326bb9;
-  border-radius: 7px;
-  color: #dceaff;
-  background: #16458d;
-  cursor: pointer;
-  font-size: 9px;
-}
-
-.spatial-filter-binary-actions button.active {
-  border-color: #4c8fff;
-  background: #1e5ec8;
+  padding: 2px 0;
 }
 
 .spectrum-module .drawing-toolbar {
@@ -672,13 +650,34 @@ body {
   min-height: 116px;
 }
 
-.spectrum-module .utility-actions > button {
-  height: auto;
-  min-height: 31px;
-  line-height: 1.25;
+.spectrum-module .tool-status,
+.spectrum-module .content-entry-actions:empty {
+  display: none;
 }
 
-.spectrum-module .utility-actions > .full-spectrum-block.active {
+.spectrum-module .edit-history-actions {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-left: 0;
+}
+
+.spectrum-module .edit-history-actions > button {
+  width: 100%;
+  min-width: 0;
+  height: 31px;
+  padding-inline: 5px;
+  white-space: nowrap;
+}
+
+.spectrum-module .edit-history-actions > button.active {
+  color: #fff;
+  border-color: #4388e7;
+  background: #1f5dc5;
+}
+
+.spectrum-module .full-spectrum-block.active {
   color: #f2f7ff;
   border-color: #4c8fff;
   background: #1b4e9d;
@@ -1976,6 +1975,10 @@ input[type="range"] {
   background: #09162d;
 }
 
+.aperture-mode-function .aperture-workspace {
+  min-height: 380px;
+}
+
 .function-pause-notice {
   grid-column: 1 / -1;
   display: flex;
@@ -1994,29 +1997,6 @@ input[type="range"] {
   color: #ffd983;
   border-color: rgba(255, 198, 74, 0.32);
   background: rgba(145, 90, 8, 0.12);
-}
-
-.preset-row {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 5px;
-  overflow-x: auto;
-}
-
-.preset-row button {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border: 1px solid #263f66;
-  border-radius: 6px;
-  color: #8fa6c8;
-  background: #0c1a34;
-  cursor: pointer;
-  font-size: 10px;
-}
-
-.preset-row button:hover {
-  color: #fff;
-  border-color: #3f73bd;
 }
 
 .formula-editor textarea {
@@ -3439,10 +3419,13 @@ input[type="range"] {
     grid-template-columns: 1fr;
   }
 
-  .preset-row,
   .function-pause-notice,
   .formula-status {
     grid-column: auto;
+  }
+
+  .aperture-mode-function .aperture-workspace {
+    min-height: 310px;
   }
 
   .formula-preview {
@@ -3538,6 +3521,10 @@ input[type="range"] {
   .aperture-workspace {
     place-items: center end;
     padding: 10px 8px 10px 92px;
+  }
+
+  .aperture-mode-function .aperture-workspace {
+    min-height: 300px;
   }
 
   .drawing-toolbar {

@@ -8,6 +8,8 @@ function slitArrayLatex(count, spacing, width) {
   return String.raw`\operatorname{rect}\left(\frac{y}{1.16}\right)\cdot\left[${slits.join("+")}\right]`;
 }
 
+const VORTEX_PHASE_LATEX = String.raw`\operatorname{circ}\left(\frac{\sqrt{x^2+y^2}}{0.42}\right)\cdot e^{i\,3\operatorname{atan2}(y,x)}`;
+
 export const COMMON_LIBRARY_PRESETS = Object.freeze([
   {
     id: "single-slit",
@@ -57,6 +59,30 @@ export const COMMON_LIBRARY_PRESETS = Object.freeze([
     description: "正弦振幅调制",
     latex: String.raw`\operatorname{rect}\left(\frac{y}{1.16}\right)\cdot\frac{1+\cos\left(16\pi x\right)}{2}`,
   },
+  {
+    id: "vortex",
+    name: "涡旋相位",
+    description: "三阶螺旋相位",
+    latex: VORTEX_PHASE_LATEX,
+  },
+  {
+    id: "annular-aperture",
+    name: "环形孔",
+    description: "环形通光带",
+    latex: String.raw`\operatorname{circ}\left(\frac{\sqrt{x^2+y^2}}{0.48}\right)-\operatorname{circ}\left(\frac{\sqrt{x^2+y^2}}{0.26}\right)`,
+  },
+  {
+    id: "gaussian-aperture",
+    name: "高斯孔径",
+    description: "柔边振幅窗",
+    latex: String.raw`e^{-5\left(x^2+y^2\right)}`,
+  },
+  {
+    id: "cosine-zone-plate",
+    name: "余弦波带片",
+    description: "同心二次条纹",
+    latex: String.raw`\operatorname{circ}\left(\frac{\sqrt{x^2+y^2}}{0.58}\right)\cdot\frac{1+\cos\left(22\cdot\pi\cdot\left(x^2+y^2\right)\right)}{2}`,
+  },
 ]);
 
 export const FORMULA_PRESETS = [
@@ -78,6 +104,6 @@ export const FORMULA_PRESETS = [
   {
     id: "vortex",
     name: "涡旋相位",
-    latex: String.raw`\operatorname{circ}\left(\frac{\sqrt{x^2+y^2}}{0.42}\right)\cdot e^{i\,3\operatorname{atan2}(y,x)}`,
+    latex: VORTEX_PHASE_LATEX,
   },
 ];

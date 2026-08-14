@@ -92,6 +92,7 @@ export const ApertureEditor = memo(function ApertureEditor({
   showRepeat = true,
   showCommunity = true,
   showLocalStorage = true,
+  showClearAction = true,
   clearLabel = "清空画布",
   clearTitle = "清空衍射屏全部内容",
   supplementalControls = null,
@@ -1106,7 +1107,7 @@ export const ApertureEditor = memo(function ApertureEditor({
     apertureRef.current = next;
     renderAmplitude(next.amplitude);
     onChange(next, { quality: "final" });
-    setToolMessage(clearLabel === "全不通" ? "频谱面已设为完全不透光" : "画布内容已清空");
+    setToolMessage("画布内容已清空");
   }
 
   function undo() {
@@ -1264,7 +1265,7 @@ export const ApertureEditor = memo(function ApertureEditor({
 
   return (
     <section
-      className={`aperture-module ${showModeTabs ? "" : "aperture-editor-embedded"} ${commonLibraryOpen ? "common-library-open" : ""}`}
+      className={`aperture-module aperture-mode-${mode} ${showModeTabs ? "" : "aperture-editor-embedded"} ${commonLibraryOpen ? "common-library-open" : ""}`}
       aria-labelledby={editorId}
       onPointerDownCapture={() => { activeDrawingEditorId = editorId; }}
     >
@@ -1479,22 +1480,25 @@ export const ApertureEditor = memo(function ApertureEditor({
               <button type="button" className="undo-action" onClick={undo} disabled={undoCount === 0} title={`撤销 Ctrl+Z（剩余 ${undoCount}/3 步）`}>
                 <ArrowCounterClockwise size={17} /><span>撤销</span><small>{undoCount}/3</small>
               </button>
-              <button type="button" onClick={clearAperture} title={clearTitle}><Trash size={17} /><span>{clearLabel}</span></button>
+              {showClearAction && <button type="button" onClick={clearAperture} title={clearTitle}><Trash size={17} /><span>{clearLabel}</span></button>}
             </div>
           </div>
         </div>
       ) : (
-        <div className="formula-editor" onPointerDownCapture={onFunctionEditStart}>
+        <div className="formula-editor">
           <div className={`function-pause-notice ${isRenderingPaused ? "paused" : ""}`} role="status">
             <Pause size={13} weight="fill" />
-            {isRenderingPaused ? "实时渲染已暂停；编辑完成后请手动继续" : "点击编辑区将自动暂停实时渲染"}
+            {isRenderingPaused ? "实时渲染已暂停；编辑完成后请手动继续" : "手动修改屏函数时将自动暂停实时渲染"}
           </div>
-          <div className="preset-row" aria-label="屏函数预设">
-            {FORMULA_PRESETS.map((preset) => (
-              <button key={preset.id} type="button" onClick={() => onFormulaChange(preset.latex)}>{preset.name}</button>
-            ))}
-          </div>
-          <textarea value={formula} onChange={(event) => onFormulaChange(event.target.value)} spellCheck="false" aria-label="LaTeX 复数屏函数" />
+          <textarea
+            value={formula}
+            onChange={(event) => {
+              onFunctionEditStart?.();
+              onFormulaChange(event.target.value);
+            }}
+            spellCheck="false"
+            aria-label="LaTeX 复数屏函数"
+          />
           <div className="formula-preview" dangerouslySetInnerHTML={{ __html: formulaPreview }} />
           <p className={`formula-status ${formulaState.state}`}>{formulaState.message}</p>
           <div className="canvas-actions utility-actions formula-utility-actions">

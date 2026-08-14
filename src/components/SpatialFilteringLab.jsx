@@ -126,12 +126,8 @@ export function SpatialFilteringLab() {
     submit(next, latestFilterRef.current, latestOutsideTransmissionRef.current);
   }, [submit]);
 
-  const updateFilterField = useCallback((next, detail) => {
+  const updateFilterField = useCallback((next) => {
     latestFilterRef.current = next;
-    if (detail?.action === "clear") {
-      latestOutsideTransmissionRef.current = 1;
-      setOutsideTransmission(1);
-    }
     setFilterPreset("custom");
     setFilterField(next);
   }, []);
@@ -260,31 +256,28 @@ export function SpatialFilteringLab() {
             showRepeat={false}
             showCommunity={false}
             showLocalStorage={false}
-            clearLabel="频谱面如下显示部分全不通"
-            clearTitle="仅将频谱面当前显示和可绘制的区域设为完全不透光，外部高频仍可通过"
+            showClearAction={false}
             showPhase
             canvasClassName={showSpectrumBackdrop ? "aperture-filter-mask" : ""}
             canvasUnderlay={showSpectrumBackdrop
               ? <SpatialFieldCanvas bitmap={frame?.spectrum} pixels={frame?.spectrumPixels} sourceSize={frame?.size} label="物面的空间频谱" />
               : null}
             canvasAriaLabel="频谱面滤波函数绘制区域"
-            supplementalControls={(
-              <div className="spatial-filter-binary-actions">
+            utilityControls={(
+              <>
                 <button type="button" className={showSpectrumBackdrop ? "active" : ""} onClick={() => setShowSpectrumBackdrop((visible) => !visible)}>
                   <ImageSquare size={14} /> {showSpectrumBackdrop ? "隐藏频谱" : "显示频谱"}
                 </button>
                 <button type="button" onClick={() => applyFilterPreset("open")}><Aperture size={14} /> 全通</button>
-              </div>
-            )}
-            utilityControls={(
-              <button
-                type="button"
-                className={outsideTransmission === 0 ? "full-spectrum-block active" : "full-spectrum-block"}
-                onClick={blockEntireSpectrum}
-                title="阻断整个 FFT 频谱，像面应完全无光"
-              >
-                <Funnel size={17} /><span>频谱面全部不通</span>
-              </button>
+                <button
+                  type="button"
+                  className={outsideTransmission === 0 ? "full-spectrum-block active" : "full-spectrum-block"}
+                  onClick={blockEntireSpectrum}
+                  title="阻断无穷大频谱面，像面严格无光"
+                >
+                  <Funnel size={15} /><span>全不通</span>
+                </button>
+              </>
             )}
           />
         </article>

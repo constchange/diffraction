@@ -218,6 +218,7 @@ export function FraunhoferLab({
   }, [announce, submitAperture]);
 
   const loadCommonPreset = useCallback((preset) => {
+    setAutoRun(true);
     setScreenFormula(preset.latex);
     setEditorMode("function");
     announce(`已从常用库载入“${preset.name}”`);
