@@ -1,4 +1,4 @@
-export function FraunhoferApparatus() {
+export function FraunhoferApparatus({ lightColor = "#ffd36b" }) {
   return (
     <section className="apparatus-section" aria-labelledby="apparatus-title">
       <h2 id="apparatus-title" className="visually-hidden">夫朗禾费衍射实验装置</h2>
@@ -8,6 +8,7 @@ export function FraunhoferApparatus() {
         role="img"
         aria-label="光源发出的光经第一片凸透镜变为平行光，照射衍射屏，再经第二片凸透镜汇聚到光屏"
         preserveAspectRatio="xMidYMid meet"
+        style={{ "--apparatus-light-color": lightColor }}
       >
         <defs>
           <linearGradient id="apparatus-lens" x1="0" y1="0" x2="1" y2="0">
@@ -20,20 +21,20 @@ export function FraunhoferApparatus() {
             <stop offset="1" stopColor="#0a1730" />
           </linearGradient>
           <radialGradient id="apparatus-source-glow">
-            <stop offset="0" stopColor="#fff7c8" stopOpacity="1" />
-            <stop offset="0.28" stopColor="#ffd05e" stopOpacity="0.82" />
-            <stop offset="1" stopColor="#ffb23f" stopOpacity="0" />
+            <stop offset="0" stopColor="#fff" stopOpacity="1" />
+            <stop offset="0.28" stopColor={lightColor} stopOpacity="0.82" />
+            <stop offset="1" stopColor={lightColor} stopOpacity="0" />
           </radialGradient>
           <radialGradient id="apparatus-spot-glow">
-            <stop offset="0" stopColor="#fff8d2" />
-            <stop offset="0.28" stopColor="#ffd36b" stopOpacity="0.95" />
-            <stop offset="1" stopColor="#ffae36" stopOpacity="0" />
+            <stop offset="0" stopColor="#fff" />
+            <stop offset="0.28" stopColor={lightColor} stopOpacity="0.95" />
+            <stop offset="1" stopColor={lightColor} stopOpacity="0" />
           </radialGradient>
           <filter id="apparatus-soft-glow" x="-80%" y="-80%" width="260%" height="260%">
             <feGaussianBlur stdDeviation="4" />
           </filter>
           <marker id="apparatus-ray-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-            <path d="M0,0 L6,3 L0,6 Z" fill="#ffd36b" />
+            <path d="M0,0 L6,3 L0,6 Z" fill={lightColor} />
           </marker>
         </defs>
 
@@ -45,7 +46,7 @@ export function FraunhoferApparatus() {
           <path d="M58 51V44H87V51" fill="none" stroke="#315b94" />
           <rect x="99" y="57" width="13" height="20" rx="3" fill="#193b6c" stroke="#4c82c9" />
           <circle cx="112" cy="67" r="21" fill="url(#apparatus-source-glow)" filter="url(#apparatus-soft-glow)" />
-          <circle cx="112" cy="67" r="3.6" fill="#fff0a3" />
+          <circle cx="112" cy="67" r="3.6" fill={lightColor} />
           <line x1="77" y1="83" x2="77" y2="111" stroke="#315b94" strokeWidth="3" />
           <path d="M58 119H96L91 111H63Z" fill="#112b51" stroke="#315b94" />
         </g>
@@ -74,9 +75,9 @@ export function FraunhoferApparatus() {
           <line x1="938" y1="107" x2="938" y2="119" stroke="#315b94" strokeWidth="3" />
           <path d="M918 119H958" stroke="#315b94" strokeWidth="3" />
           <ellipse cx="934" cy="67" rx="15" ry="25" fill="url(#apparatus-spot-glow)" filter="url(#apparatus-soft-glow)" opacity="0.82" />
-          <ellipse cx="934" cy="67" rx="3.6" ry="8" fill="#fff0a3" />
-          <ellipse cx="934" cy="50" rx="1.6" ry="4" fill="#ffc857" opacity="0.78" />
-          <ellipse cx="934" cy="84" rx="1.6" ry="4" fill="#ffc857" opacity="0.78" />
+          <ellipse cx="934" cy="67" rx="3.6" ry="8" fill={lightColor} />
+          <ellipse cx="934" cy="50" rx="1.6" ry="4" fill={lightColor} opacity="0.78" />
+          <ellipse cx="934" cy="84" rx="1.6" ry="4" fill={lightColor} opacity="0.78" />
         </g>
 
         <g className="apparatus-rays apparatus-rays-source">

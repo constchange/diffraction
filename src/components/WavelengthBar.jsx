@@ -3,7 +3,12 @@ import { wavelengthToRgb } from "../core/display.js";
 
 export { wavelengthToRgb };
 
-export function WavelengthBar({ value, disabled = false }) {
+export function WavelengthBar({
+  value,
+  disabled = false,
+  onChange,
+  ariaLabel = "光源波长",
+}) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -23,15 +28,31 @@ export function WavelengthBar({ value, disabled = false }) {
       }
     }
     context.putImageData(image, 0, 0);
-    const markerX = ((value - 380) / 320) * canvas.width;
+    const markerRadius = 7.5;
+    const markerX = markerRadius + ((value - 380) / 320) * (canvas.width - markerRadius * 2);
     context.beginPath();
-    context.arc(markerX, canvas.height / 2, 6, 0, Math.PI * 2);
+    context.arc(markerX, canvas.height / 2, markerRadius, 0, Math.PI * 2);
     context.fillStyle = "#f8fbff";
     context.fill();
-    context.lineWidth = 2;
-    context.strokeStyle = "#2770ff";
+    context.lineWidth = 2.2;
+    context.strokeStyle = "rgba(20, 42, 78, 0.9)";
     context.stroke();
   }, [value, disabled]);
 
-  return <canvas className="wavelength-bar" ref={canvasRef} width="240" height="16" aria-hidden="true" />;
+  return (
+    <div className={`wavelength-spectrum-control ${disabled ? "disabled" : ""}`}>
+      <canvas className="wavelength-bar" ref={canvasRef} width="240" height="18" aria-hidden="true" />
+      <input
+        className="wavelength-spectrum-input"
+        type="range"
+        min="380"
+        max="700"
+        step="1"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange?.(Number(event.target.value))}
+        aria-label={ariaLabel}
+      />
+    </div>
+  );
 }

@@ -11,6 +11,11 @@ import { WaveSine } from "@phosphor-icons/react/WaveSine";
 import katex from "katex";
 import { createAperture, APERTURE_SIZE, apertureStats } from "../core/aperture.js";
 import {
+  DEFAULT_APERTURE_WIDTH_MM,
+  fraunhoferObservationWidthMm,
+  niceScaleBar,
+} from "../core/coordinates.js";
+import {
   createBrandedPatternDataUrl,
   createBrandedPatternDataUrlFromFrame,
   EXPORT_IMAGE_SIZE,
@@ -25,6 +30,7 @@ import { FraunhoferApparatus } from "./FraunhoferApparatus.jsx";
 import { WavelengthBar, wavelengthToRgb } from "./WavelengthBar.jsx";
 import { CommunityApertures } from "./CommunityApertures.jsx";
 import { OnboardingTour } from "./OnboardingTour.jsx";
+import { PlaneCoordinates } from "./PlaneCoordinates.jsx";
 
 const onboardingClaims = new Map();
 
@@ -55,7 +61,7 @@ function Formula({ children, displayMode = false }) {
   return <span className="katex-wrap" dangerouslySetInnerHTML={{ __html: markup }} />;
 }
 
-function SliderField({ label, symbol, valueText, min, max, step, value, onChange, disabled, children }) {
+function SliderField({ label, symbol, valueText, min, max, step, value, onChange, disabled, children, showRange = true }) {
   return (
     <div className={`inspector-field ${disabled ? "disabled" : ""}`}>
       <div className="field-heading">
@@ -63,16 +69,16 @@ function SliderField({ label, symbol, valueText, min, max, step, value, onChange
         <strong>{valueText}</strong>
       </div>
       {children}
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(Number(event.target.value))}
-        aria-label={label}
-      />
+      {showRange && <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(Number(event.target.value))}
+          aria-label={label}
+        />}
       <div className="range-labels"><span>{min}</span><span>{(min + max) / 2}</span><span>{max}</span></div>
     </div>
   );
@@ -225,6 +231,8 @@ export function FraunhoferLab({
   }, [announce]);
 
   const lightColor = `rgb(${wavelengthColor.join(",")})`;
+  const apparatusLightColor = whiteLight ? "#fff8dc" : lightColor;
+  const observationWidthMm = fraunhoferObservationWidthMm(zoom);
 
   return (
     <div className={`fraunhofer-lab-root ${compact ? "compact" : ""}`}>
@@ -237,7 +245,7 @@ export function FraunhoferLab({
       </header>}
 
       <main className={`lab-main ${embeddedInWorkspace ? "workspace-embedded-lab" : ""}`}>
-        <FraunhoferApparatus />
+        <FraunhoferApparatus lightColor={apparatusLightColor} />
 
         <div className="experiment-layout">
           <section className="experiment-deck" aria-label="衍射仿真实验台">
@@ -255,6 +263,8 @@ export function FraunhoferLab({
                 onOpenCommunity={() => setCommunityOpen(true)}
                 onLoadCommonPreset={loadCommonPreset}
                 isRenderingPaused={!autoRun}
+                scaleBar={DEFAULT_APERTURE_WIDTH_MM / 4}
+                scaleBarUnit="mm"
               />
 
               <div className="optical-bridge" aria-label={`薄透镜焦距 ${focalLength.toFixed(2)} 米`}>
@@ -278,6 +288,11 @@ export function FraunhoferLab({
                     frame={frame}
                     wavelength={wavelength}
                     whiteLight={whiteLight}
+                  />
+                  <PlaneCoordinates
+                    unit="mm"
+                    extent={observationWidthMm / 2}
+                    scaleBar={niceScaleBar(observationWidthMm)}
                   />
                 </div>
                 <footer className="screen-caption">
@@ -322,8 +337,8 @@ export function FraunhoferLab({
               </div>
             </section>
 
-            <SliderField label="波长" symbol="λ" valueText={whiteLight ? "380–700 nm" : `${wavelength} nm`} min={380} max={700} step={1} value={wavelength} onChange={setWavelength} disabled={whiteLight}>
-              <WavelengthBar value={wavelength} disabled={whiteLight} />
+            <SliderField label="波长" symbol="λ" valueText={whiteLight ? "380–700 nm" : `${wavelength} nm`} min={380} max={700} step={1} value={wavelength} onChange={setWavelength} disabled={whiteLight} showRange={false}>
+              <WavelengthBar value={wavelength} disabled={whiteLight} onChange={setWavelength} />
             </SliderField>
 
             <SliderField label="透镜焦距" symbol="f" valueText={`${focalLength.toFixed(2)} m`} min={0.2} max={2} step={0.02} value={focalLength} onChange={setFocalLength} />

@@ -12,6 +12,12 @@ import { Scan } from "@phosphor-icons/react/Scan";
 import { SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import symmetricObjectUrl from "../assets/symmetric-object.jpeg";
 import { createBrandedPatternCanvas } from "../core/exportPattern.js";
+import {
+  niceScaleBar,
+  SPATIAL_OBJECT_WIDTH_MM,
+  SPATIAL_WAVELENGTH_NM,
+  spatialSpectrumWidthPerMm,
+} from "../core/coordinates.js";
 import { imageDataToAmplitudeField } from "../core/imageField.js";
 import {
   createSpatialFilter,
@@ -20,7 +26,10 @@ import {
 } from "../core/spatialFilter.js";
 import { useSpatialFilter } from "../hooks/useSpatialFilter.js";
 import { ApertureEditor } from "./ApertureEditor.jsx";
+import { CompactOpticalApparatus } from "./CompactOpticalApparatus.jsx";
+import { PlaneCoordinates } from "./PlaneCoordinates.jsx";
 import { SpatialFieldCanvas } from "./SpatialFieldCanvas.jsx";
+import { WavelengthBar, wavelengthToRgb } from "./WavelengthBar.jsx";
 
 const OBJECT_PRESETS = [
   { id: "academy", name: "十字标板" },
@@ -39,6 +48,7 @@ const FILTER_PRESETS = [
   { id: "notch", name: "陷波", detail: "抑制周期噪声", Icon: Scan },
   { id: "abbe", name: "阿贝级次", detail: "逐级恢复结构", Icon: GridFour },
   { id: "phase-contrast", name: "相位衬度", detail: "中心相移 π/2", Icon: SlidersHorizontal },
+  { id: "blocked-all", name: "全不通", detail: "阻断全部频谱", Icon: Funnel },
 ];
 
 function OpticalArrow({ children }) {
@@ -63,20 +73,23 @@ export function SpatialFilteringLab() {
   const [activePanel, setActivePanel] = useState("filter");
   const [showSpectrumBackdrop, setShowSpectrumBackdrop] = useState(true);
   const [outsideTransmission, setOutsideTransmission] = useState(1);
+  const [wavelengthNm, setWavelengthNm] = useState(SPATIAL_WAVELENGTH_NM);
   const imageCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const { frame, status, submit } = useSpatialFilter(
     initialObjectRef.current,
     initialFilterRef.current,
     SPATIAL_FILTER_SIZE,
+    1,
+    SPATIAL_WAVELENGTH_NM,
   );
   const latestObjectRef = useRef(initialObjectRef.current);
   const latestFilterRef = useRef(initialFilterRef.current);
   const latestOutsideTransmissionRef = useRef(1);
 
   useEffect(() => {
-    submit(objectField, filterField, outsideTransmission);
-  }, [filterField, objectField, outsideTransmission, submit]);
+    submit(objectField, filterField, outsideTransmission, wavelengthNm);
+  }, [filterField, objectField, outsideTransmission, submit, wavelengthNm]);
 
   const filterOptions = useMemo(() => ({
     radius: filterRadius,
@@ -123,8 +136,8 @@ export function SpatialFilteringLab() {
 
   const previewObjectField = useCallback((next) => {
     latestObjectRef.current = next;
-    submit(next, latestFilterRef.current, latestOutsideTransmissionRef.current);
-  }, [submit]);
+    submit(next, latestFilterRef.current, latestOutsideTransmissionRef.current, wavelengthNm);
+  }, [submit, wavelengthNm]);
 
   const updateFilterField = useCallback((next) => {
     latestFilterRef.current = next;
@@ -134,8 +147,8 @@ export function SpatialFilteringLab() {
 
   const previewFilterField = useCallback((next) => {
     latestFilterRef.current = next;
-    submit(latestObjectRef.current, next, latestOutsideTransmissionRef.current);
-  }, [submit]);
+    submit(latestObjectRef.current, next, latestOutsideTransmissionRef.current, wavelengthNm);
+  }, [submit, wavelengthNm]);
 
   const blockEntireSpectrum = useCallback(() => {
     const next = createSpatialFilter(SPATIAL_FILTER_SIZE, "blocked");
@@ -155,6 +168,8 @@ export function SpatialFilteringLab() {
       <input ref={fileInputRef} type="file" accept="image/*" onChange={loadImage} hidden />
     </div>
   );
+  const lightColor = `rgb(${wavelengthToRgb(wavelengthNm).join(",")})`;
+  const spectrumWidthPerMm = spatialSpectrumWidthPerMm();
 
   async function loadImage(event) {
     const file = event.target.files?.[0];
@@ -204,6 +219,18 @@ export function SpatialFilteringLab() {
         <div className={`spatial-status ${status.state}`}><i />{status.state === "ready" ? `实时 · ${status.elapsed.toFixed(0)} ms` : status.state === "error" ? status.message : "计算中"}</div>
       </header>
 
+      <CompactOpticalApparatus
+        variant="spatial"
+        lightColor={lightColor}
+        wavelengthNm={wavelengthNm}
+        controls={(
+          <div className="compact-wavelength-control">
+            <label><span>照明波长 λ</span><output>{wavelengthNm} nm</output></label>
+            <WavelengthBar value={wavelengthNm} onChange={setWavelengthNm} ariaLabel="空间滤波照明波长" />
+          </div>
+        )}
+      />
+
       <nav className="spatial-mobile-switcher" aria-label="空间滤波工作区">
         {[["object", "物面"], ["filter", "频谱面"], ["image", "像面"]].map(([id, label]) => (
           <button key={id} type="button" className={activePanel === id ? "active" : ""} onClick={() => setActivePanel(id)}>{label}</button>
@@ -231,6 +258,9 @@ export function SpatialFilteringLab() {
             clearLabel="清空物面"
             clearTitle="清空物面全部内容"
             supplementalControls={objectPresets}
+            coordinateUnit="mm"
+            coordinateExtent={SPATIAL_OBJECT_WIDTH_MM / 2}
+            scaleBar={niceScaleBar(SPATIAL_OBJECT_WIDTH_MM)}
             canvasAriaLabel="空间滤波物面绘制区域"
           />
         </article>
@@ -258,28 +288,47 @@ export function SpatialFilteringLab() {
             showLocalStorage={false}
             showClearAction={false}
             showPhase
+            coordinateUnit="mm⁻¹"
+            coordinateExtent={spectrumWidthPerMm / 2}
+            scaleBar={niceScaleBar(spectrumWidthPerMm)}
             canvasClassName={showSpectrumBackdrop ? "aperture-filter-mask" : ""}
             canvasUnderlay={showSpectrumBackdrop
               ? <SpatialFieldCanvas bitmap={frame?.spectrum} pixels={frame?.spectrumPixels} sourceSize={frame?.size} label="物面的空间频谱" />
               : null}
             canvasAriaLabel="频谱面滤波函数绘制区域"
             utilityControls={(
-              <>
-                <button type="button" className={showSpectrumBackdrop ? "active" : ""} onClick={() => setShowSpectrumBackdrop((visible) => !visible)}>
-                  <ImageSquare size={14} /> {showSpectrumBackdrop ? "隐藏频谱" : "显示频谱"}
-                </button>
-                <button type="button" onClick={() => applyFilterPreset("open")}><Aperture size={14} /> 全通</button>
-                <button
-                  type="button"
-                  className={outsideTransmission === 0 ? "full-spectrum-block active" : "full-spectrum-block"}
-                  onClick={blockEntireSpectrum}
-                  title="阻断无穷大频谱面，像面严格无光"
-                >
-                  <Funnel size={15} /><span>全不通</span>
-                </button>
-              </>
+              <button type="button" className={showSpectrumBackdrop ? "active" : ""} onClick={() => setShowSpectrumBackdrop((visible) => !visible)}>
+                <ImageSquare size={14} /> {showSpectrumBackdrop ? "隐藏频谱" : "显示频谱"}
+              </button>
             )}
           />
+          <section className="spectrum-filter-panel" aria-label="频谱滤波器">
+            <div className="spatial-inspector-title"><Funnel size={19} weight="duotone" /><div><strong>频谱滤波器</strong><span>选择预设后仍可在频谱面继续绘制</span></div></div>
+            <div className="filter-preset-grid">
+              {FILTER_PRESETS.map(({ id, name, detail, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={filterPreset === id ? "active" : ""}
+                  onClick={() => id === "blocked-all" ? blockEntireSpectrum() : applyFilterPreset(id)}
+                >
+                  <Icon size={16} weight="duotone" /><span><strong>{name}</strong><small>{detail}</small></span>
+                </button>
+              ))}
+            </div>
+            <div className="spectrum-filter-options">
+              {["low-pass", "high-pass", "phase-contrast"].includes(filterPreset) && (
+                <label className="spatial-parameter"><span>截止半径</span><input type="range" min="0.04" max="0.65" step="0.01" value={filterRadius} onChange={(event) => updateFilterOption("radius", Number(event.target.value))} /><output>{filterRadius.toFixed(2)} fₙ</output></label>
+              )}
+              {["horizontal", "vertical"].includes(filterPreset) && (
+                <label className="spatial-parameter"><span>狭缝宽度</span><input type="range" min="0.02" max="0.5" step="0.01" value={slitWidth} onChange={(event) => updateFilterOption("slit", Number(event.target.value))} /><output>{slitWidth.toFixed(2)} fₙ</output></label>
+              )}
+              {filterPreset === "abbe" && (
+                <div className="abbe-order-control"><span>开放衍射级次</span><div>{[0, 1, 2].map((order) => <button key={order} type="button" className={abbeOrder === order ? "active" : ""} onClick={() => updateFilterOption("abbeOrder", order)}>{order === 0 ? "零级" : `至 ±${order} 级`}</button>)}</div></div>
+              )}
+            </div>
+            <div className="spatial-theory-note"><Scan size={17} /><p><strong>读图提示</strong><span>频谱中心对应缓慢变化的轮廓；离中心越远，代表越精细的空间结构。</span></p></div>
+          </section>
         </article>
 
         <OpticalArrow>成像透镜 L₂</OpticalArrow>
@@ -288,6 +337,7 @@ export function SpatialFilteringLab() {
           <header><span>03</span><div><h2>像面</h2><p>|F⁻¹{'{'}H·F(U₀){'}'}|²</p></div></header>
           <div className="spatial-canvas-shell image-shell">
             <SpatialFieldCanvas ref={imageCanvasRef} bitmap={frame?.image} pixels={frame?.imagePixels} sourceSize={frame?.size} label="空间滤波后的像面强度" />
+            <PlaneCoordinates unit="mm" extent={SPATIAL_OBJECT_WIDTH_MM / 2} scaleBar={niceScaleBar(SPATIAL_OBJECT_WIDTH_MM)} />
           </div>
           <footer className="spatial-module-controls image-controls">
             <div><ImageSquare size={17} /><span>像面强度</span><strong>{filterPreset === "blocked-all" ? "全部不通" : FILTER_PRESETS.find((item) => item.id === filterPreset)?.name ?? "自由滤波"}</strong></div>
@@ -296,26 +346,6 @@ export function SpatialFilteringLab() {
         </article>
       </div>
 
-      <aside className="spatial-filter-inspector">
-        <div className="spatial-inspector-title"><Funnel size={21} weight="duotone" /><div><strong>频谱滤波器</strong><span>选择预设后仍可在频谱面继续绘制</span></div></div>
-        <div className="filter-preset-grid">
-          {FILTER_PRESETS.map(({ id, name, detail, Icon }) => (
-            <button key={id} type="button" className={filterPreset === id ? "active" : ""} onClick={() => applyFilterPreset(id)}>
-              <Icon size={17} weight="duotone" /><span><strong>{name}</strong><small>{detail}</small></span>
-            </button>
-          ))}
-        </div>
-        {["low-pass", "high-pass", "phase-contrast"].includes(filterPreset) && (
-          <label className="spatial-parameter"><span>截止半径</span><input type="range" min="0.04" max="0.65" step="0.01" value={filterRadius} onChange={(event) => updateFilterOption("radius", Number(event.target.value))} /><output>{filterRadius.toFixed(2)} fₙ</output></label>
-        )}
-        {["horizontal", "vertical"].includes(filterPreset) && (
-          <label className="spatial-parameter"><span>狭缝宽度</span><input type="range" min="0.02" max="0.5" step="0.01" value={slitWidth} onChange={(event) => updateFilterOption("slit", Number(event.target.value))} /><output>{slitWidth.toFixed(2)} fₙ</output></label>
-        )}
-        {filterPreset === "abbe" && (
-          <div className="abbe-order-control"><span>开放衍射级次</span><div>{[0, 1, 2].map((order) => <button key={order} type="button" className={abbeOrder === order ? "active" : ""} onClick={() => updateFilterOption("abbeOrder", order)}>{order === 0 ? "零级" : `至 ±${order} 级`}</button>)}</div></div>
-        )}
-        <div className="spatial-theory-note"><Scan size={18} /><p><strong>读图提示</strong><span>这里与夫朗禾费光屏采用相同的 FFT 采样和增强显示；频谱中心对应缓慢变化的轮廓，离中心越远，代表越精细的空间结构。</span></p></div>
-      </aside>
     </section>
   );
 }

@@ -100,6 +100,10 @@ export const ApertureEditor = memo(function ApertureEditor({
   canvasUnderlay = null,
   canvasClassName = "",
   showPhase = false,
+  coordinateUnit = null,
+  coordinateExtent = 1,
+  scaleBar = null,
+  scaleBarUnit = coordinateUnit,
   canvasAriaLabel = "衍射屏透光率绘制区域，黑色不透光，白色完全透光",
 }) {
   const canvasRef = useRef(null);
@@ -160,6 +164,10 @@ export const ApertureEditor = memo(function ApertureEditor({
   const visibleTools = allowedTools
     ? TOOLS.filter((candidate) => allowedTools.includes(candidate.id))
     : TOOLS;
+  const coordinateValue = Number(coordinateExtent) || 1;
+  const formatCoordinate = (value) => Math.abs(value) >= 10
+    ? value.toFixed(0)
+    : value.toFixed(1).replace(/\.0$/, "");
 
   modeRef.current = mode;
 
@@ -1366,9 +1374,12 @@ export const ApertureEditor = memo(function ApertureEditor({
               ))}
             </svg>
           )}
-          <span className="axis-label axis-x">x</span>
-          <span className="axis-label axis-y">y</span>
-          <div className="canvas-scale">−1.0 <span>0</span> +1.0</div>
+          <span className="axis-label axis-x">x{coordinateUnit ? ` / ${coordinateUnit}` : ""}</span>
+          <span className="axis-label axis-y">y{coordinateUnit ? ` / ${coordinateUnit}` : ""}</span>
+          <div className="canvas-scale">
+            −{formatCoordinate(coordinateValue)} <span>0</span> +{formatCoordinate(coordinateValue)}
+          </div>
+          {scaleBar && <div className="canvas-metric-scale"><i /><span>{scaleBar} {scaleBarUnit}</span></div>}
         </div>
       </div>
 

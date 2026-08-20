@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const UPDATE_INTERVAL_MS = 110;
 
-export function useSpatialFilter(initialObject, initialFilter, size, initialOutsideTransmission = 1) {
+export function useSpatialFilter(initialObject, initialFilter, size, initialOutsideTransmission = 1, initialWavelengthNm = 532) {
   const workerRef = useRef(null);
   const latestRef = useRef({
     object: initialObject,
     filter: initialFilter,
     outsideTransmission: initialOutsideTransmission,
+    wavelengthNm: initialWavelengthNm,
     revision: 1,
   });
   const sentRevisionRef = useRef(0);
@@ -16,11 +17,12 @@ export function useSpatialFilter(initialObject, initialFilter, size, initialOuts
   const [frame, setFrame] = useState(null);
   const [status, setStatus] = useState({ state: "computing", elapsed: 0, message: "" });
 
-  const submit = useCallback((object, filter, outsideTransmission = 1) => {
+  const submit = useCallback((object, filter, outsideTransmission = 1, wavelengthNm = 532) => {
     latestRef.current = {
       object,
       filter,
       outsideTransmission,
+      wavelengthNm,
       revision: latestRef.current.revision + 1,
     };
   }, []);
@@ -49,6 +51,7 @@ export function useSpatialFilter(initialObject, initialFilter, size, initialOuts
         filterAmplitude,
         filterPhase,
         outsideTransmission: latest.outsideTransmission,
+        wavelengthNm: latest.wavelengthNm,
       }, [objectAmplitude.buffer, objectPhase.buffer, filterAmplitude.buffer, filterPhase.buffer]);
     }
 

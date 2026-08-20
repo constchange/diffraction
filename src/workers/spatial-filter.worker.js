@@ -1,5 +1,5 @@
 import { renderSpatialField, spatialFilterField } from "../core/spatialFilter.js";
-import { renderFieldRgba } from "../core/display.js";
+import { renderFieldRgba, wavelengthToRgb } from "../core/display.js";
 
 let workQueue = Promise.resolve();
 
@@ -14,14 +14,15 @@ async function sendFrame(data) {
     undefined,
     data.outsideTransmission,
   );
+  const lightColor = wavelengthToRgb(data.wavelengthNm ?? 532);
   const spectrumPixels = renderFieldRgba(result.spectrum, {
-    wavelength: 532,
+    wavelength: data.wavelengthNm ?? 532,
     focalLength: 1.2,
     zoom: 1.45,
     displayMode: "enhanced",
-    monochromeColor: [94, 200, 255],
+    monochromeColor: lightColor,
   }, data.size, data.size);
-  const imagePixels = renderSpatialField(result.image, "image", [240, 247, 255]);
+  const imagePixels = renderSpatialField(result.image, "image", lightColor);
   const elapsed = performance.now() - startedAt;
   const common = { type: "frame", revision: data.revision, elapsed, size: data.size };
 
