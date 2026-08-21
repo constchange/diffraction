@@ -27,6 +27,7 @@ body {
 .experiment-workspace-root {
   --workspace-topbar-height: 78px;
   min-height: 100vh;
+  overflow-x: hidden;
   color: #edf4ff;
   background: #030919;
 }
@@ -95,6 +96,7 @@ body {
 
 .experiment-tabs button > span {
   display: grid;
+  min-width: 0;
   gap: 2px;
 }
 
@@ -105,9 +107,12 @@ body {
 }
 
 .experiment-tabs strong {
+  overflow: hidden;
   color: #aebed5;
   font-size: 11px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .experiment-tabs button.active {
@@ -4137,7 +4142,9 @@ input[type="range"] {
   .spatial-filter-lab > .spatial-stage { grid-row: 4; }
   .spectrum-filter-panel .filter-preset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-  .fresnel-lab { grid-template-rows: auto 154px auto auto auto; }
+  .compact-apparatus-fresnel { height: 112px; }
+  .compact-apparatus-fresnel .compact-apparatus-diagram { height: 112px; }
+  .fresnel-lab { grid-template-rows: auto 112px auto auto auto; }
   .fresnel-lab > .fresnel-mobile-switcher { grid-row: 3; }
   .fresnel-stage { grid-row: 4; }
   .fresnel-inspector { grid-row: 5; }
