@@ -5,7 +5,6 @@ import { Eye } from "@phosphor-icons/react/Eye";
 import { Ruler } from "@phosphor-icons/react/Ruler";
 import { WaveSine } from "@phosphor-icons/react/WaveSine";
 import { apertureStats } from "../core/aperture.js";
-import { niceScaleBar } from "../core/coordinates.js";
 import { createBrandedPatternCanvas } from "../core/exportPattern.js";
 import {
   createFresnelAperture,
@@ -161,7 +160,7 @@ export function FresnelDiffractionLab() {
             supplementalControls={presets}
             coordinateUnit="mm"
             coordinateExtent={planeWidthMm / 2}
-            scaleBar={niceScaleBar(planeWidthMm)}
+            scaleBar={1}
             canvasAriaLabel="菲涅尔衍射屏透光率绘制区域"
           />
         </article>
@@ -175,17 +174,19 @@ export function FresnelDiffractionLab() {
             <strong><Eye size={14} /> {displayMode === "enhanced" ? "增强显示" : "线性强度"}</strong>
           </header>
           <div className="fresnel-output-shell">
-            <SpatialFieldCanvas
-              ref={outputCanvasRef}
-              pixels={frame?.pixels}
-              sourceSize={frame?.size}
-              label="菲涅尔衍射观察屏光强"
-            />
-            <PlaneCoordinates
-              unit="mm"
-              extent={planeWidthMm / 2}
-              scaleBar={niceScaleBar(planeWidthMm)}
-            />
+            <div className="coordinate-plane-frame fresnel-coordinate-frame">
+              <SpatialFieldCanvas
+                ref={outputCanvasRef}
+                pixels={frame?.pixels}
+                sourceSize={frame?.size}
+                label="菲涅尔衍射观察屏光强"
+              />
+              <PlaneCoordinates
+                unit="mm"
+                extent={planeWidthMm / 2}
+                scaleBar={1}
+              />
+            </div>
           </div>
           <footer>
             <div><WaveSine size={17} /><span>菲涅尔传播</span><strong>{distanceM.toFixed(2)} m</strong></div>

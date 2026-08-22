@@ -297,7 +297,7 @@ body {
   min-height: 250px;
   place-items: center;
   overflow: hidden;
-  padding: 14px;
+  padding: 14px 42px 42px 14px;
   background:
     radial-gradient(circle at center, rgba(12, 35, 70, 0.22), transparent 64%),
     #020713;
@@ -576,7 +576,7 @@ body {
   --spatial-editor-toolbar-left: 8px;
   --spatial-editor-toolbar-top: 12px;
   --spatial-editor-canvas-offset-x: 82px;
-  --spatial-editor-workspace-height: 325px;
+  --spatial-editor-workspace-height: 354px;
   display: block;
   overflow: visible;
   border: 0;
@@ -600,7 +600,7 @@ body {
   position: absolute;
   top: var(--spatial-editor-toolbar-top);
   left: calc(var(--spatial-editor-toolbar-left) + var(--spatial-editor-canvas-offset-x));
-  width: min(70%, 300px, calc(100% - var(--spatial-editor-toolbar-left) - var(--spatial-editor-canvas-offset-x) - 10px));
+  width: min(70%, 300px, calc(100% - var(--spatial-editor-toolbar-left) - var(--spatial-editor-canvas-offset-x) - 38px));
 }
 
 .spatial-editor-module .aperture-workspace {
@@ -700,7 +700,7 @@ body {
   }
 
   .spatial-editor-module .aperture-canvas-shell {
-    width: min(300px, calc(100% - var(--spatial-editor-toolbar-left) - var(--spatial-editor-canvas-offset-x) - 10px));
+    width: min(300px, calc(100% - var(--spatial-editor-toolbar-left) - var(--spatial-editor-canvas-offset-x) - 38px));
   }
 
   .spatial-editor-module .draw-controls,
@@ -1230,6 +1230,7 @@ input[type="range"] {
   min-height: 0;
   place-items: center;
   overflow: hidden;
+  padding: 12px 38px 38px 92px;
   background: #050b19;
 }
 
@@ -1305,7 +1306,7 @@ input[type="range"] {
 
 .aperture-canvas-shell {
   position: relative;
-  width: min(72%, 340px);
+  width: min(100%, 340px);
   aspect-ratio: 1;
   border: 1px solid #35547d;
   background: #000;
@@ -1446,39 +1447,6 @@ input[type="range"] {
   stroke: rgba(119, 154, 201, 0.22);
   stroke-width: 0.24;
   vector-effect: non-scaling-stroke;
-}
-
-.axis-label {
-  position: absolute;
-  z-index: 2;
-  pointer-events: none;
-  color: #6282ad;
-  font-family: Georgia, serif;
-  font-size: 11px;
-  font-style: italic;
-}
-
-.axis-x {
-  right: 7px;
-  bottom: 5px;
-}
-
-.axis-y {
-  top: 5px;
-  left: 7px;
-}
-
-.canvas-scale {
-  position: absolute;
-  z-index: 2;
-  pointer-events: none;
-  right: 0;
-  bottom: -20px;
-  left: 0;
-  display: flex;
-  justify-content: space-between;
-  color: #4e6486;
-  font-size: 9px;
 }
 
 .draw-controls {
@@ -2135,14 +2103,15 @@ input[type="range"] {
   display: grid;
   min-height: 0;
   place-items: center;
-  padding: 22px;
+  overflow: hidden;
+  padding: 18px 42px 42px 16px;
   background: #040a1b;
 }
 
 .diffraction-canvas {
   display: block;
-  width: min(100%, 430px);
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   aspect-ratio: 1;
   border: 1px solid #213a63;
   object-fit: contain;
@@ -2151,7 +2120,7 @@ input[type="range"] {
 }
 
 @media (min-width: 861px) {
-  .diffraction-canvas {
+  .observation-coordinate-frame {
     transform: translateY(-10px);
   }
 }
@@ -3375,7 +3344,7 @@ input[type="range"] {
 
   .aperture-workspace {
     place-items: center end;
-    padding: 12px 8px 12px 96px;
+    padding: 12px 34px 38px 96px;
   }
 
   .drawing-toolbar {
@@ -3525,7 +3494,7 @@ input[type="range"] {
 
   .aperture-workspace {
     place-items: center end;
-    padding: 10px 8px 10px 92px;
+    padding: 10px 32px 36px 92px;
   }
 
   .aperture-mode-function .aperture-workspace {
@@ -3537,10 +3506,10 @@ input[type="range"] {
   }
 
   .observation-canvas-shell {
-    padding: 12px;
+    padding: 10px 36px 38px 10px;
   }
 
-  .diffraction-canvas {
+  .observation-coordinate-frame {
     width: min(88%, 300px);
     transform: translateY(-27px);
   }
@@ -3659,7 +3628,7 @@ input[type="range"] {
 }
 
 .fresnel-aperture-card {
-  --spatial-editor-workspace-height: 325px;
+  --spatial-editor-workspace-height: 354px;
   min-width: 0;
 }
 
@@ -3720,7 +3689,7 @@ input[type="range"] {
 .fresnel-output-card {
   display: grid;
   min-width: 0;
-  grid-template-rows: 58px 325px auto;
+  grid-template-rows: 58px 354px auto;
   overflow: hidden;
   border: 1px solid #193a65;
   border-radius: 12px;
@@ -3767,14 +3736,10 @@ input[type="range"] {
   min-height: 0;
   place-items: center;
   overflow: hidden;
-  padding: 14px;
+  padding: 14px 42px 42px 14px;
   background: radial-gradient(circle at center, rgba(14, 46, 91, 0.26), transparent 66%), #020713;
 }
-.fresnel-output-shell .spatial-field-canvas { width: min(100%, 296px); }
-.fresnel-axis-x,
-.fresnel-axis-y { position: absolute; z-index: 2; color: #3f648f; font-family: Georgia, serif; font-size: 10px; pointer-events: none; }
-.fresnel-axis-x { right: 18px; bottom: 17px; }
-.fresnel-axis-y { top: 17px; left: 18px; }
+.fresnel-output-shell .spatial-field-canvas { width: 100%; }
 .fresnel-output-card > footer {
   display: grid;
   min-height: 78px;
@@ -3897,7 +3862,7 @@ input[type="range"] {
   .fresnel-display-mode,
   .fresnel-readout,
   .fresnel-theory-note { grid-column: 1; }
-  .fresnel-output-shell .spatial-field-canvas { width: min(100%, 296px); }
+  .fresnel-coordinate-frame { width: min(100%, 296px); }
 }
 
 @media (max-width: 380px) {
@@ -3950,45 +3915,90 @@ input[type="range"] {
 .wavelength-spectrum-control.disabled { opacity: 0.42; }
 
 /* Scientific canvas coordinates and scale bars */
+.coordinate-plane-frame {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+}
+
+.coordinate-plane-frame > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.observation-coordinate-frame { width: min(100%, 430px); }
+.spatial-image-coordinate-frame { width: min(100%, 360px); }
+.fresnel-coordinate-frame { width: min(100%, 296px); }
+
 .plane-coordinates {
   position: absolute;
-  z-index: 6;
+  z-index: 8;
   inset: 0;
+  overflow: visible;
   color: #7693bd;
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 8px;
+  font-size: 7px;
   pointer-events: none;
   text-shadow: 0 1px 3px #000;
 }
 
-.plane-axis-unit { position: absolute; }
-.plane-axis-x { right: 18px; bottom: 18px; }
-.plane-axis-y { top: 18px; left: 18px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.plane-math-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.plane-math-mark .katex { font-size: 1em; }
+.plane-axis-unit { position: absolute; color: #8ca8cd; }
+.plane-axis-x {
+  top: calc(100% + 19px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.plane-axis-y {
+  top: 50%;
+  left: calc(100% + 18px);
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: center;
+}
+
 .plane-coordinate-ticks {
   position: absolute;
-  right: 18px;
-  bottom: 5px;
-  left: 18px;
   display: flex;
-  justify-content: space-between;
-  color: #506d96;
+  color: #607fa9;
   font-size: 7px;
+}
+
+.plane-coordinate-ticks-x {
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  justify-content: space-between;
+}
+
+.plane-coordinate-ticks-y {
+  top: 0;
+  bottom: 0;
+  left: calc(100% + 4px);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .plane-scale-bar {
   position: absolute;
-  bottom: 27px;
-  left: 22px;
+  bottom: 10px;
+  left: 10px;
   display: grid;
-  min-width: 36px;
   justify-items: center;
   gap: 2px;
-  color: #b6c9e2;
+  color: #d4e3f7;
   font-size: 7px;
 }
 
-.plane-scale-bar i,
-.canvas-metric-scale i {
+.plane-scale-bar i {
   position: relative;
   display: block;
   width: 100%;
@@ -3998,26 +4008,6 @@ input[type="range"] {
   border-left: 1px solid currentColor;
   box-shadow: 0 1px 3px #000;
 }
-
-.canvas-metric-scale {
-  position: absolute;
-  z-index: 8;
-  bottom: 8px;
-  left: 8px;
-  display: grid;
-  width: 25%;
-  min-width: 42px;
-  justify-items: center;
-  gap: 2px;
-  color: #d4e3f7;
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 7px;
-  pointer-events: none;
-  text-shadow: 0 1px 3px #000;
-}
-
-.aperture-canvas-shell .axis-label { z-index: 8; }
-.aperture-canvas-shell .canvas-scale { z-index: 8; }
 
 /* Compact, instrument-like optical benches */
 .compact-apparatus-section {

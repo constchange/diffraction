@@ -13,7 +13,6 @@ import { createAperture, APERTURE_SIZE, apertureStats } from "../core/aperture.j
 import {
   DEFAULT_APERTURE_WIDTH_MM,
   fraunhoferObservationWidthMm,
-  niceScaleBar,
 } from "../core/coordinates.js";
 import {
   createBrandedPatternDataUrl,
@@ -263,7 +262,9 @@ export function FraunhoferLab({
                 onOpenCommunity={() => setCommunityOpen(true)}
                 onLoadCommonPreset={loadCommonPreset}
                 isRenderingPaused={!autoRun}
-                scaleBar={DEFAULT_APERTURE_WIDTH_MM / 4}
+                coordinateUnit="mm"
+                coordinateExtent={DEFAULT_APERTURE_WIDTH_MM / 2}
+                scaleBar={1}
                 scaleBarUnit="mm"
               />
 
@@ -283,17 +284,21 @@ export function FraunhoferLab({
                   <span className={`live-badge ${autoRun ? status.state : "paused"}`}><i /> {!autoRun ? "已暂停" : status.state === "computing" ? "计算中" : "实时"}</span>
                 </header>
                 <div className="observation-canvas-shell">
-                  <DiffractionCanvas
-                    ref={outputCanvasRef}
-                    frame={frame}
-                    wavelength={wavelength}
-                    whiteLight={whiteLight}
-                  />
-                  <PlaneCoordinates
-                    unit="mm"
-                    extent={observationWidthMm / 2}
-                    scaleBar={niceScaleBar(observationWidthMm)}
-                  />
+                  <div className="coordinate-plane-frame observation-coordinate-frame">
+                    <DiffractionCanvas
+                      ref={outputCanvasRef}
+                      frame={frame}
+                      wavelength={wavelength}
+                      whiteLight={whiteLight}
+                    />
+                    <PlaneCoordinates
+                      unit="mm"
+                      extent={observationWidthMm / 2}
+                      scaleBar={1}
+                      xSymbol="u"
+                      ySymbol="v"
+                    />
+                  </div>
                 </div>
                 <footer className="screen-caption">
                   <div className="display-scale-control" aria-label="光强显示标度">

@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  coordinateScaleLatex,
+  coordinateUnitLatex,
   fraunhoferObservationWidthMm,
   niceScaleBar,
   spatialSpectrumWidthPerMm,
 } from "../src/core/coordinates.js";
+
+test("coordinate labels use explicit LaTeX units", () => {
+  assert.equal(coordinateUnitLatex("mm"), String.raw`\mathrm{mm}`);
+  assert.equal(coordinateUnitLatex("inverse-mm"), String.raw`\mathrm{mm}^{-1}`);
+  assert.equal(coordinateScaleLatex(1, "mm"), String.raw`1\,\mathrm{mm}`);
+  assert.equal(coordinateScaleLatex(1, "inverse-mm"), String.raw`1\,(\mathrm{mm}^{-1})`);
+});
 
 test("Fraunhofer observation coordinates shrink inversely with viewing zoom", () => {
   const base = fraunhoferObservationWidthMm(1);

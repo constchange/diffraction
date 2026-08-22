@@ -45,3 +45,21 @@ export function niceScaleBar(totalWidth, targetFraction = 0.25) {
   const step = normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1;
   return step * exponent;
 }
+
+export function coordinateUnitLatex(unit) {
+  if (["mm⁻¹", "mm^-1", "inverse-mm"].includes(unit)) {
+    return String.raw`\mathrm{mm}^{-1}`;
+  }
+  if (unit === "mm") return String.raw`\mathrm{mm}`;
+  return String.raw`\mathrm{${String(unit ?? "").replace(/[^a-zA-Z]/g, "")}}`;
+}
+
+export function coordinateScaleLatex(value, unit) {
+  const formattedValue = Number.isInteger(value)
+    ? String(value)
+    : Number(value).toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  const formattedUnit = coordinateUnitLatex(unit);
+  return ["mm⁻¹", "mm^-1", "inverse-mm"].includes(unit)
+    ? String.raw`${formattedValue}\,(${formattedUnit})`
+    : String.raw`${formattedValue}\,${formattedUnit}`;
+}

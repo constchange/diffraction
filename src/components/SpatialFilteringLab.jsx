@@ -13,7 +13,6 @@ import { SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import symmetricObjectUrl from "../assets/symmetric-object.jpeg";
 import { createBrandedPatternCanvas } from "../core/exportPattern.js";
 import {
-  niceScaleBar,
   SPATIAL_OBJECT_WIDTH_MM,
   SPATIAL_WAVELENGTH_NM,
   spatialSpectrumWidthPerMm,
@@ -260,7 +259,7 @@ export function SpatialFilteringLab() {
             supplementalControls={objectPresets}
             coordinateUnit="mm"
             coordinateExtent={SPATIAL_OBJECT_WIDTH_MM / 2}
-            scaleBar={niceScaleBar(SPATIAL_OBJECT_WIDTH_MM)}
+            scaleBar={1}
             canvasAriaLabel="空间滤波物面绘制区域"
           />
         </article>
@@ -288,9 +287,11 @@ export function SpatialFilteringLab() {
             showLocalStorage={false}
             showClearAction={false}
             showPhase
-            coordinateUnit="mm⁻¹"
+            coordinateUnit="inverse-mm"
             coordinateExtent={spectrumWidthPerMm / 2}
-            scaleBar={niceScaleBar(spectrumWidthPerMm)}
+            scaleBar={1}
+            coordinateXSymbol="f_x"
+            coordinateYSymbol="f_y"
             canvasClassName={showSpectrumBackdrop ? "aperture-filter-mask" : ""}
             canvasUnderlay={showSpectrumBackdrop
               ? <SpatialFieldCanvas bitmap={frame?.spectrum} pixels={frame?.spectrumPixels} sourceSize={frame?.size} label="物面的空间频谱" />
@@ -336,8 +337,10 @@ export function SpatialFilteringLab() {
         <article className={`spatial-module image-module ${activePanel === "image" ? "mobile-active" : ""}`}>
           <header><span>03</span><div><h2>像面</h2><p>|F⁻¹{'{'}H·F(U₀){'}'}|²</p></div></header>
           <div className="spatial-canvas-shell image-shell">
-            <SpatialFieldCanvas ref={imageCanvasRef} bitmap={frame?.image} pixels={frame?.imagePixels} sourceSize={frame?.size} label="空间滤波后的像面强度" />
-            <PlaneCoordinates unit="mm" extent={SPATIAL_OBJECT_WIDTH_MM / 2} scaleBar={niceScaleBar(SPATIAL_OBJECT_WIDTH_MM)} />
+            <div className="coordinate-plane-frame spatial-image-coordinate-frame">
+              <SpatialFieldCanvas ref={imageCanvasRef} bitmap={frame?.image} pixels={frame?.imagePixels} sourceSize={frame?.size} label="空间滤波后的像面强度" />
+              <PlaneCoordinates unit="mm" extent={SPATIAL_OBJECT_WIDTH_MM / 2} scaleBar={1} />
+            </div>
           </div>
           <footer className="spatial-module-controls image-controls">
             <div><ImageSquare size={17} /><span>像面强度</span><strong>{filterPreset === "blocked-all" ? "全部不通" : FILTER_PRESETS.find((item) => item.id === filterPreset)?.name ?? "自由滤波"}</strong></div>

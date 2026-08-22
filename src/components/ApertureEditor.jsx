@@ -44,6 +44,7 @@ import {
   screenDefinitionMode,
   writeLocalApertures,
 } from "../core/apertureStorage.js";
+import { PlaneCoordinates } from "./PlaneCoordinates.jsx";
 
 const UNDO_LIMIT = 3;
 const CONTINUOUS_TOOLS = new Set(["brush", "eraser"]);
@@ -104,6 +105,8 @@ export const ApertureEditor = memo(function ApertureEditor({
   coordinateExtent = 1,
   scaleBar = null,
   scaleBarUnit = coordinateUnit,
+  coordinateXSymbol = "x",
+  coordinateYSymbol = "y",
   canvasAriaLabel = "衍射屏透光率绘制区域，黑色不透光，白色完全透光",
 }) {
   const canvasRef = useRef(null);
@@ -164,11 +167,6 @@ export const ApertureEditor = memo(function ApertureEditor({
   const visibleTools = allowedTools
     ? TOOLS.filter((candidate) => allowedTools.includes(candidate.id))
     : TOOLS;
-  const coordinateValue = Number(coordinateExtent) || 1;
-  const formatCoordinate = (value) => Math.abs(value) >= 10
-    ? value.toFixed(0)
-    : value.toFixed(1).replace(/\.0$/, "");
-
   modeRef.current = mode;
 
   useEffect(() => {
@@ -1374,12 +1372,15 @@ export const ApertureEditor = memo(function ApertureEditor({
               ))}
             </svg>
           )}
-          <span className="axis-label axis-x">x{coordinateUnit ? ` / ${coordinateUnit}` : ""}</span>
-          <span className="axis-label axis-y">y{coordinateUnit ? ` / ${coordinateUnit}` : ""}</span>
-          <div className="canvas-scale">
-            −{formatCoordinate(coordinateValue)} <span>0</span> +{formatCoordinate(coordinateValue)}
-          </div>
-          {scaleBar && <div className="canvas-metric-scale"><i /><span>{scaleBar} {scaleBarUnit}</span></div>}
+          {coordinateUnit && (
+            <PlaneCoordinates
+              unit={scaleBarUnit}
+              extent={coordinateExtent}
+              scaleBar={scaleBar}
+              xSymbol={coordinateXSymbol}
+              ySymbol={coordinateYSymbol}
+            />
+          )}
         </div>
       </div>
 

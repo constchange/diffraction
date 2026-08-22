@@ -1,18 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
-function drawGuides(context, width, height) {
-  context.save();
-  context.strokeStyle = "rgba(133, 164, 226, 0.18)";
-  context.lineWidth = 1;
-  context.beginPath();
-  context.moveTo(width / 2, 14);
-  context.lineTo(width / 2, height - 14);
-  context.moveTo(14, height / 2);
-  context.lineTo(width - 14, height / 2);
-  context.stroke();
-  context.restore();
-}
-
 export const DiffractionCanvas = forwardRef(function DiffractionCanvas(
   { frame, wavelength, whiteLight },
   forwardedRef,
@@ -38,7 +25,6 @@ export const DiffractionCanvas = forwardRef(function DiffractionCanvas(
           0,
         );
       }
-      drawGuides(context, canvas.width, canvas.height);
     });
     return () => {
       cancelled = true;
