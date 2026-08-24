@@ -58,6 +58,28 @@ function AperturePlate({ x, label = "衍射屏" }) {
   );
 }
 
+function RayBundle({ section, paths, arrowId, arrowPaths = null }) {
+  return (
+    <g className="compact-bench-rays" data-ray-section={section}>
+      {paths.map((path) => (
+        <path
+          key={path}
+          d={path}
+          markerEnd={arrowPaths ? undefined : `url(#${arrowId})`}
+        />
+      ))}
+      {arrowPaths?.map((path) => (
+        <path
+          key={`arrow-${path}`}
+          className="compact-ray-direction"
+          d={path}
+          markerEnd={`url(#${arrowId})`}
+        />
+      ))}
+    </g>
+  );
+}
+
 export function CompactOpticalApparatus({
   variant,
   lightColor,
@@ -119,22 +141,43 @@ export function CompactOpticalApparatus({
             <Screen x={552} label="频谱滤波面" spotId={spotId} filtered />
             <Lens x={730} gradientId={lensId} label="成像透镜 L₂" />
             <Screen x={950} label="像面" spotId={spotId} />
-            <g className="compact-bench-rays" style={{ markerEnd: `url(#${arrowId})` }}>
-              <path d="M121 56L205 38M121 56H205M121 56L205 74" />
-              <path d="M218 38L390 28L552 56M218 56H552M218 74L390 84L552 56" />
-              <path d="M560 56L730 28L950 40M560 56H950M560 56L730 84L950 72" />
-            </g>
+            <RayBundle
+              section="source-to-object"
+              arrowId={arrowId}
+              paths={["M121 56L205 38", "M121 56H205", "M121 56L205 74"]}
+            />
+            <RayBundle
+              section="object-to-spectrum"
+              arrowId={arrowId}
+              paths={["M218 38L390 28L552 56", "M218 56H552", "M218 74L390 84L552 56"]}
+              arrowPaths={["M470 41.8L500 47", "M470 56H500", "M470 70.2L500 65"]}
+            />
+            <RayBundle
+              section="spectrum-to-image"
+              arrowId={arrowId}
+              paths={["M560 56L730 28L950 40", "M560 56H950", "M560 56L730 84L950 72"]}
+            />
           </>
         ) : (
           <>
             <Lens x={290} gradientId={lensId} label="准直透镜" />
             <AperturePlate x={518} />
             <Screen x={950} label="观察屏" spotId={spotId} />
-            <g className="compact-bench-rays" style={{ markerEnd: `url(#${arrowId})` }}>
-              <path d="M121 56L290 30M121 56H290M121 56L290 82" />
-              <path d="M292 30H511M292 56H511M292 82H511" />
-              <path d="M525 30L950 38M525 56H950M525 82L950 74" />
-            </g>
+            <RayBundle
+              section="source-to-collimator"
+              arrowId={arrowId}
+              paths={["M121 56L290 30", "M121 56H290", "M121 56L290 82"]}
+            />
+            <RayBundle
+              section="collimator-to-aperture"
+              arrowId={arrowId}
+              paths={["M292 30H511", "M292 56H511", "M292 82H511"]}
+            />
+            <RayBundle
+              section="aperture-to-screen"
+              arrowId={arrowId}
+              paths={["M525 50L950 38", "M525 56H950", "M525 62L950 74"]}
+            />
             <g className="compact-distance-mark">
               <path d="M535 101V109M535 105H933M933 101V109" />
               <text x="734" y="100">z = {distanceM.toFixed(2)} m</text>
