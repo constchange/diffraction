@@ -92,13 +92,21 @@ export function requireSameOrigin(request) {
   }
 }
 
-export function getSupabaseConfig(env) {
-  const url = String(env?.SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
-  const key = String(env?.SUPABASE_SECRET_KEY ?? env?.SUPABASE_KEY ?? "").trim();
-  if (!/^https:\/\/[^/]+/.test(url) || !key) {
+export function getCloudBaseConfig(env) {
+  const environment = String(env?.CLOUDBASE_ENV ?? "").trim();
+  // EdgeOne limits each environment variable to 1000 characters, while this
+  // environment's public JWT is longer. Keep the two parts server-side only.
+  const publishableKey = String(env?.CLOUDBASE_PUBLISHABLE_KEY_1 ?? "")
+    + String(env?.CLOUDBASE_PUBLISHABLE_KEY_2 ?? "");
+  const serverToken = String(env?.DIFFRACTION_SERVER_TOKEN ?? "").trim();
+  if (!/^[a-z0-9][a-z0-9-]{5,80}$/.test(environment) || !publishableKey || !serverToken) {
     throw new ApiError(503, "DATABASE_NOT_CONFIGURED", "公共空间尚未配置数据库");
   }
-  return { url, key };
+  return {
+    endpoint: `https://${environment}.api.tcloudbasegateway.com/v1/rdb/rest/rpc/diffraction_community_call`,
+    publishableKey,
+    serverToken,
+  };
 }
 
 function isLocalHostname(hostname) {
@@ -123,55 +131,38 @@ async function sha256Hex(value) {
   return Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function ownerHashFor(request, env) {
-  const ip = getClientIp(request);
-  const { data } = await supabaseRequest(env, "rpc/community_owner_hash", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ client_ip: ip }),
-  });
-  if (typeof data !== "string" || !/^[0-9a-f]{64}$/.test(data)) {
-    throw new ApiError(503, "OWNER_IDENTITY_FAILED", "数据库无法生成稳定的网络地址标识");
+export async function communityRequest(env, action, payload = {}, request) {
+  const config = getCloudBaseConfig(env);
+  const clientIp = request ? getClientIp(request) : null;
+  let response;
+  try {
+    response = await fetch(config.endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.publishableKey}`,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        p_action: action,
+        p_server_token: config.serverToken,
+        p_client_ip: clientIp,
+        p_payload: payload,
+      }),
+    });
+  } catch {
+    throw new ApiError(503, "DATABASE_REQUEST_FAILED", "公共空间数据库暂时无法连接");
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new ApiError(503, "DATABASE_REQUEST_FAILED", "公共空间数据库返回格式有误");
+  }
+  if (!response.ok || !data || typeof data !== "object" || Array.isArray(data)) {
+    throw new ApiError(503, "DATABASE_REQUEST_FAILED", "公共空间数据库请求失败");
   }
   return data;
-}
-
-function supabaseHeaders(config, extra = {}) {
-  const headers = {
-    apikey: config.key,
-    accept: "application/json",
-    ...extra,
-  };
-  if (!config.key.startsWith("sb_secret_")) {
-    headers.authorization = `Bearer ${config.key}`;
-  }
-  return headers;
-}
-
-export async function supabaseRequest(env, resourceAndQuery, options = {}) {
-  const config = getSupabaseConfig(env);
-  const response = await fetch(`${config.url}/rest/v1/${resourceAndQuery}`, {
-    ...options,
-    headers: supabaseHeaders(config, options.headers),
-  });
-  const text = await response.text();
-  let data = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-  }
-  if (!response.ok) {
-    throw new ApiError(
-      response.status >= 500 ? 503 : response.status,
-      "DATABASE_REQUEST_FAILED",
-      "数据库请求失败，请确认 SQL 与环境变量已经配置",
-      typeof data === "object" && data ? { code: data.code } : undefined,
-    );
-  }
-  return { data, headers: response.headers, status: response.status };
 }
 
 function normalizeModerationText(value) {
@@ -309,13 +300,9 @@ export async function parseUploadRequest(request) {
   };
 }
 
-export async function getModerationTerms(env) {
-  const { data } = await supabaseRequest(
-    env,
-    "community_blocked_terms?select=term,category&enabled=eq.true&limit=1000",
-  );
-  const dynamicTerms = Array.isArray(data)
-    ? data.filter((item) => typeof item?.term === "string" && typeof item?.category === "string")
+export function getModerationTerms(review) {
+  const dynamicTerms = Array.isArray(review?.terms)
+    ? review.terms.filter((item) => typeof item?.term === "string" && typeof item?.category === "string")
       .map((item) => [item.term, item.category])
     : [];
   const unique = new Map();
@@ -341,35 +328,12 @@ export function moderateTextFields({ nickname, patternName, formula }, terms) {
   }
 }
 
-export async function assertPatternAllowed(env, patternHash) {
-  const { data } = await supabaseRequest(
-    env,
-    `community_blocked_pattern_hashes?select=category&pattern_hash=eq.${patternHash}&limit=1`,
-  );
-  if (Array.isArray(data) && data.length > 0) {
-    const category = data[0].category;
+export function assertPatternAllowed(review) {
+  if (review?.blocked === true) {
+    const category = review.category;
     throw new ApiError(422, "CONTENT_REJECTED", `衍射屏图样触发${CATEGORY_LABELS[category] ?? "敏感内容"}规则，上传数据已丢弃`, {
       field: "aperture",
       category,
     });
   }
-}
-
-export function mapCommunityMetadata(row) {
-  return {
-    id: row.id,
-    slot: row.slot,
-    nickname: row.nickname,
-    patternName: row.pattern_name,
-    preview: row.preview_data,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-export function mapCommunityDetail(row) {
-  return {
-    ...mapCommunityMetadata(row),
-    aperture: row.aperture_data,
-  };
 }

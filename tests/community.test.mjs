@@ -2,15 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ApiError,
+  communityRequest,
   getClientIp,
   moderateTextFields,
-  ownerHashFor,
   parseUploadRequest,
   validateApertureData,
 } from "../edge-functions/_shared/community.js";
 import { encodeAperture, encodeScreenDefinition } from "../src/core/apertureStorage.js";
 import { onRequestPost as onUploadPost } from "../edge-functions/api/community-apertures/index.js";
 import { onRequestPost as onOnboardingPost } from "../edge-functions/api/community-apertures/onboarding.js";
+
+const TEST_ENV = {
+  CLOUDBASE_ENV: "example-cloudbase-123",
+  CLOUDBASE_PUBLISHABLE_KEY_1: "public-part-one",
+  CLOUDBASE_PUBLISHABLE_KEY_2: "public-part-two",
+  DIFFRACTION_SERVER_TOKEN: "server-only-test-token",
+};
 
 function sampleEncodedAperture(size = 256) {
   const amplitude = new Float32Array(size * size);
@@ -108,12 +115,15 @@ test("upload metadata rejects an unavailable slot without advertising capacity",
   );
 });
 
-test("owner identity is a salted digest and never exposes the client IP", async () => {
+test("CloudBase RPC receives the EdgeOne IP only in its server-side body", async () => {
   const originalFetch = globalThis.fetch;
+  let sentUrl = "";
   let sentBody = "";
-  globalThis.fetch = async (_url, options) => {
+  globalThis.fetch = async (url, options) => {
+    sentUrl = String(url);
     sentBody = options.body;
-    return Response.json("a".repeat(64));
+    assert.equal(options.headers.authorization, "Bearer public-part-onepublic-part-two");
+    return Response.json({ items: [] });
   };
   const request = {
     url: "https://example.test/api/community-apertures",
@@ -122,41 +132,41 @@ test("owner identity is a salted digest and never exposes the client IP", async 
   };
   assert.equal(getClientIp(request), "203.0.113.42");
   try {
-    const ownerHash = await ownerHashFor(request, {
-      SUPABASE_URL: "https://sample.supabase.co",
-      SUPABASE_SECRET_KEY: "sb_secret_test_value",
+    assert.deepEqual(await communityRequest(TEST_ENV, "mine", {}, request), { items: [] });
+    assert.match(sentUrl, /\/v1\/rdb\/rest\/rpc\/diffraction_community_call$/);
+    assert.equal(sentUrl.includes("203.0.113.42"), false);
+    assert.deepEqual(JSON.parse(sentBody), {
+      p_action: "mine",
+      p_server_token: "server-only-test-token",
+      p_client_ip: "203.0.113.42",
+      p_payload: {},
     });
-    assert.match(ownerHash, /^[0-9a-f]{64}$/);
-    assert.equal(ownerHash.includes("203.0.113.42"), false);
-    assert.equal(JSON.parse(sentBody).client_ip, "203.0.113.42");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("community upload route moderates and inserts through a server-only Supabase key", async (context) => {
+test("community upload route reviews and writes through the scoped CloudBase RPC", async (context) => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   context.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async (url, options = {}) => {
     calls.push({ url: String(url), options });
-    if (String(url).includes("rpc/community_owner_hash")) return Response.json("b".repeat(64));
-    if (String(url).includes("community_blocked_terms")) {
-      return Response.json([{ term: "赌博", category: "gambling" }]);
+    const body = JSON.parse(options.body);
+    if (body.p_action === "review") {
+      return Response.json({ terms: [{ term: "赌博", category: "gambling" }], blocked: false });
     }
-    if (String(url).includes("community_blocked_pattern_hashes")) return Response.json([]);
-    if (String(url).includes("owner_hash=eq.")) return Response.json([]);
-    if (options.method === "POST") {
-      const record = JSON.parse(options.body);
-      return Response.json([{
+    if (body.p_action === "upload") {
+      const record = body.p_payload;
+      return Response.json({ item: {
         id: "79811b15-1dc6-4fc4-8a58-148b301865af",
         slot: record.slot,
         nickname: record.nickname,
-        pattern_name: record.pattern_name,
-        preview_data: record.preview_data,
+        patternName: record.patternName,
+        preview: record.preview,
         created_at: "2026-08-10T08:00:00.000Z",
         updated_at: "2026-08-10T08:00:00.000Z",
-      }], { status: 201 });
+      }, overwritten: false });
     }
     throw new Error(`unexpected request: ${url}`);
   };
@@ -174,16 +184,14 @@ test("community upload route moderates and inserts through a server-only Supabas
   Object.defineProperty(request, "eo", { value: { clientIp: "203.0.113.9" } });
   const response = await onUploadPost({
     request,
-    env: {
-      SUPABASE_URL: "https://sample.supabase.co",
-      SUPABASE_SECRET_KEY: "sb_secret_test_value",
-    },
+    env: TEST_ENV,
   });
   const payload = await response.json();
   assert.equal(response.status, 201);
   assert.equal(payload.item.patternName, "双圆孔");
-  assert.equal(calls.at(-1).options.headers.apikey, "sb_secret_test_value");
-  assert.equal("authorization" in calls.at(-1).options.headers, false);
+  assert.equal(calls.at(-1).options.headers.authorization, "Bearer public-part-onepublic-part-two");
+  assert.equal(JSON.parse(calls.at(-1).options.body).p_server_token, TEST_ENV.DIFFRACTION_SERVER_TOKEN);
+  assert.equal(JSON.parse(calls.at(-1).options.body).p_client_ip, "203.0.113.9");
   assert.equal(calls.some((call) => call.url.includes("203.0.113.9")), false);
 });
 
@@ -193,8 +201,7 @@ test("community upload route discards metadata rejected by moderation", async (c
   context.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async () => {
     requestCount += 1;
-    if (requestCount === 1) return Response.json("c".repeat(64));
-    return Response.json([{ term: "赌博", category: "gambling" }]);
+    return Response.json({ terms: [{ term: "赌博", category: "gambling" }], blocked: false });
   };
   const request = new Request("https://example.test/api/community-apertures", {
     method: "POST",
@@ -209,17 +216,14 @@ test("community upload route discards metadata rejected by moderation", async (c
   Object.defineProperty(request, "eo", { value: { clientIp: "203.0.113.10" } });
   const response = await onUploadPost({
     request,
-    env: {
-      SUPABASE_URL: "https://sample.supabase.co",
-      SUPABASE_SECRET_KEY: "sb_secret_test_value",
-    },
+    env: TEST_ENV,
   });
   const payload = await response.json();
   assert.equal(response.status, 422);
   assert.equal(payload.error.code, "CONTENT_REJECTED");
   assert.equal(payload.error.message, "内容不符合上传要求，无法上传");
   assert.equal("details" in payload.error, false, "public response must not disclose filtering rules");
-  assert.equal(requestCount, 2, "rejected metadata must not reach aperture insert queries");
+  assert.equal(requestCount, 1, "rejected metadata must not reach aperture insert queries");
 });
 
 test("onboarding claim shows only for the first visit and stores no raw IP", async (context) => {
@@ -229,11 +233,10 @@ test("onboarding claim shows only for the first visit and stores no raw IP", asy
   let inserted = false;
   globalThis.fetch = async (url, options = {}) => {
     requests.push({ url: String(url), options });
-    if (String(url).includes("rpc/community_owner_hash")) return Response.json("d".repeat(64));
-    if (String(url).includes("community_onboarding_visits")) {
-      if (inserted) return Response.json([]);
+    if (JSON.parse(options.body).p_action === "onboarding") {
+      const show = !inserted;
       inserted = true;
-      return Response.json([{ owner_hash: "d".repeat(64) }], { status: 201 });
+      return Response.json({ show });
     }
     throw new Error(`unexpected request: ${url}`);
   };
@@ -247,19 +250,15 @@ test("onboarding claim shows only for the first visit and stores no raw IP", asy
     Object.defineProperty(request, "eo", { value: { clientIp: "203.0.113.77" } });
     const response = await onOnboardingPost({
       request,
-      env: {
-        SUPABASE_URL: "https://sample.supabase.co",
-        SUPABASE_SECRET_KEY: "sb_secret_test_value",
-      },
+      env: TEST_ENV,
     });
     return response.json();
   }
 
   assert.deepEqual(await claim(), { show: true });
   assert.deepEqual(await claim(), { show: false });
-  const onboardingCalls = requests.filter((item) => item.url.includes("community_onboarding_visits"));
+  const onboardingCalls = requests.filter((item) => JSON.parse(item.options.body).p_action === "onboarding");
   assert.equal(onboardingCalls.length, 2);
-  assert.match(onboardingCalls[0].options.headers.prefer, /ignore-duplicates/);
   assert.equal(onboardingCalls.some((item) => item.url.includes("203.0.113.77")), false);
-  assert.equal(onboardingCalls.some((item) => String(item.options.body).includes("203.0.113.77")), false);
+  assert.equal(onboardingCalls.every((item) => JSON.parse(item.options.body).p_client_ip === "203.0.113.77"), true);
 });
